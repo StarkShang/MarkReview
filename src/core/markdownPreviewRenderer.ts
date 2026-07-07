@@ -230,7 +230,7 @@ function renderInlineMarkdown(text: string, baseOffset: number): string {
 
     const nextMarkerIndex = findNextCriticMarkupStart(text, index + 1);
     const endIndex = nextMarkerIndex === -1 ? text.length : nextMarkerIndex;
-    html += renderPlainInline(text.slice(index, endIndex));
+    html += renderPlainInlineWithOffsets(text.slice(index, endIndex), baseOffset + index);
     index = endIndex;
   }
 
@@ -339,6 +339,14 @@ function renderMarkedSpan(
     html: `<span class="mr-mark ${className}" data-markreview-start="${startOffset}" data-markreview-end="${endOffset}">${content}</span>`,
     nextIndex
   };
+}
+
+function renderPlainInlineWithOffsets(text: string, baseOffset: number): string {
+  if (text.length === 0) {
+    return '';
+  }
+
+  return `<span data-markreview-text-start="${baseOffset}" data-markreview-text-end="${baseOffset + text.length}">${renderPlainInline(text)}</span>`;
 }
 
 function renderPlainInline(text: string): string {

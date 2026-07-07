@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { MarkReviewCommandId } from '../commands/markReviewCommandIds';
+import { markCommentedText } from '../core/criticMarkup';
 import { renderMarkdownPreviewContent } from '../core/markdownPreviewRenderer';
 import { MarkdownSourceTracker } from '../vscode/markdownSourceTracker';
 
@@ -95,7 +96,42 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 
     if (message.type === 'openSource') {
       await vscode.commands.executeCommand(MarkReviewCommandId.OpenSource);
+      return;
     }
+
+    if (message.type === 'addComment') {
+      await this.addCommentFromPreview(message);
+    }
+  }
+
+  private async addCommentFromPreview(message: WebviewMessage): Promise<void> {
+    if (!this.document || message.startOffset === undefined || message.endOffset === undefined) {
+      return;
+    }
+
+    const comment = message.comment?.trim();
+    if (!comment) {
+      return;
+    }
+
+    const startOffset = Math.min(message.startOffset, message.endOffset);
+    const endOffset = Math.max(message.startOffset, message.endOffset);
+    if (startOffset === endOffset) {
+      return;
+    }
+
+    const range = new vscode.Range(
+      this.document.positionAt(startOffset),
+      this.document.positionAt(endOffset)
+    );
+    const selectedText = this.document.getText(range);
+    if (selectedText.trim().length === 0) {
+      return;
+    }
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(this.document.uri, range, markCommentedText(selectedText, comment));
+    await vscode.workspace.applyEdit(edit);
   }
 
   private update(): void {
@@ -181,6 +217,96 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 
     .mr-toolbar-button:hover {
       background: var(--vscode-button-hoverBackground);
+    }
+
+    .mr-context-menu {
+      position: fixed;
+      z-index: 30;
+      display: none;
+      min-width: 150px;
+      border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border));
+      border-radius: 4px;
+      padding: 4px;
+      background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    }
+
+    .mr-context-menu.is-open {
+      display: block;
+    }
+
+    .mr-context-menu button {
+      width: 100%;
+      border: 0;
+      border-radius: 3px;
+      padding: 6px 8px;
+      color: var(--vscode-menu-foreground, var(--vscode-editor-foreground));
+      background: transparent;
+      font: inherit;
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .mr-context-menu button:hover {
+      background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+      color: var(--vscode-menu-selectionForeground, var(--vscode-editor-foreground));
+    }
+
+    .mr-comment-composer {
+      position: fixed;
+      z-index: 31;
+      display: none;
+      width: min(340px, calc(100vw - 28px));
+      border: 1px solid var(--vscode-inputOption-activeBorder, var(--vscode-focusBorder));
+      border-radius: 6px;
+      padding: 10px;
+      background: var(--vscode-editorWidget-background);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
+    }
+
+    .mr-comment-composer.is-open {
+      display: block;
+    }
+
+    .mr-comment-composer textarea {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 84px;
+      resize: vertical;
+      border: 1px solid var(--vscode-input-border, var(--vscode-editorWidget-border));
+      border-radius: 4px;
+      padding: 8px;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      font: inherit;
+      line-height: 1.45;
+    }
+
+    .mr-comment-composer-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .mr-comment-composer button {
+      border: 1px solid var(--vscode-button-border, transparent);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .mr-comment-submit {
+      color: var(--vscode-button-foreground);
+      background: var(--vscode-button-background);
+    }
+
+    .mr-comment-cancel {
+      color: var(--vscode-button-secondaryForeground);
+      background: var(--vscode-button-secondaryBackground);
     }
 
     h1, h2, h3, h4, h5, h6 {
@@ -280,24 +406,13 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     }
 
     .mr-highlight,
-    .mr-highlighted-text {
-      background: rgba(255, 213, 77, 0.32);
-    }
-
     .mr-commented {
-      background: rgba(255, 213, 77, 0.18);
+      background: rgba(255, 213, 77, 0.32);
+      box-shadow: inset 0 -2px 0 rgba(255, 193, 7, 0.65);
     }
 
-    .mr-comment-badge,
-    .mr-standalone-comment {
-      margin-left: 0.35em;
-      border: 1px solid rgba(88, 166, 255, 0.5);
-      border-radius: 4px;
-      padding: 0.08em 0.38em;
-      color: var(--vscode-textLink-foreground);
-      background: rgba(88, 166, 255, 0.14);
-      font-size: 0.9em;
-      font-style: italic;
+    .mr-hidden-comment {
+      display: none;
     }
 
     .mr-replacement {
@@ -322,6 +437,16 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
   </style>
 </head>
 <body>
+  <div class="mr-context-menu" data-role="context-menu">
+    <button type="button" data-command="addComment">Add Comment</button>
+  </div>
+  <div class="mr-comment-composer" data-role="comment-composer">
+    <textarea data-role="comment-input" placeholder="Write a comment..."></textarea>
+    <div class="mr-comment-composer-actions">
+      <button class="mr-comment-cancel" type="button" data-command="cancelComment">Cancel</button>
+      <button class="mr-comment-submit" type="button" data-command="submitComment">Add Comment</button>
+    </div>
+  </div>
   <main class="mr-shell">
     <header class="mr-toolbar">
       <div class="mr-title">${title}</div>
@@ -333,8 +458,57 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
   </main>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const contextMenu = document.querySelector('[data-role="context-menu"]');
+    const commentComposer = document.querySelector('[data-role="comment-composer"]');
+    const commentInput = document.querySelector('[data-role="comment-input"]');
+    let pendingSelection = undefined;
+    let pendingPoint = { x: 0, y: 0 };
+
+    document.addEventListener('contextmenu', (event) => {
+      const selectionRange = getSelectedSourceRange();
+      if (!selectionRange) {
+        hideContextMenu();
+        return;
+      }
+
+      event.preventDefault();
+      pendingSelection = selectionRange;
+      pendingPoint = { x: event.clientX, y: event.clientY };
+      showContextMenu(event.clientX, event.clientY);
+    });
 
     document.addEventListener('click', (event) => {
+      const commandTarget = event.target instanceof Element
+        ? event.target.closest('[data-command]')
+        : null;
+
+      if (commandTarget?.dataset.command === 'addComment') {
+        hideContextMenu();
+        showCommentComposer(pendingPoint.x, pendingPoint.y);
+        return;
+      }
+
+      if (commandTarget?.dataset.command === 'cancelComment') {
+        hideCommentComposer();
+        return;
+      }
+
+      if (commandTarget?.dataset.command === 'submitComment') {
+        submitComment();
+        return;
+      }
+
+      if (commandTarget?.dataset.command === 'openSource') {
+        vscode.postMessage({ type: 'openSource' });
+        return;
+      }
+
+      if (event.target instanceof Element && event.target.closest('[data-role="context-menu"], [data-role="comment-composer"]')) {
+        return;
+      }
+
+      hideContextMenu();
+
       const target = event.target instanceof Element
         ? event.target.closest('[data-markreview-start]')
         : null;
@@ -349,17 +523,121 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
           startOffset: Number(target.dataset.markreviewStart),
           endOffset: Number(target.dataset.markreviewEnd)
         });
+      }
+    });
+
+    commentInput.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        submitComment();
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        hideCommentComposer();
+      }
+    });
+
+    function submitComment() {
+      const comment = commentInput.value.trim();
+      if (!pendingSelection || comment.length === 0) {
+        commentInput.focus();
         return;
       }
 
-      const commandTarget = event.target instanceof Element
-        ? event.target.closest('[data-command]')
-        : null;
+      vscode.postMessage({
+        type: 'addComment',
+        startOffset: pendingSelection.startOffset,
+        endOffset: pendingSelection.endOffset,
+        comment
+      });
+      hideCommentComposer();
+      window.getSelection()?.removeAllRanges();
+    }
 
-      if (commandTarget?.dataset.command === 'openSource') {
-        vscode.postMessage({ type: 'openSource' });
+    function getSelectedSourceRange() {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed || selection.toString().trim().length === 0) {
+        return undefined;
       }
-    });
+
+      const anchorOffset = getSourceOffset(selection.anchorNode, selection.anchorOffset);
+      const focusOffset = getSourceOffset(selection.focusNode, selection.focusOffset);
+      if (anchorOffset === undefined || focusOffset === undefined || anchorOffset === focusOffset) {
+        return undefined;
+      }
+
+      return {
+        startOffset: Math.min(anchorOffset, focusOffset),
+        endOffset: Math.max(anchorOffset, focusOffset)
+      };
+    }
+
+    function getSourceOffset(node, offset) {
+      if (!node) {
+        return undefined;
+      }
+
+      const element = node.nodeType === Node.ELEMENT_NODE
+        ? node
+        : node.parentElement;
+      const sourceSpan = element?.closest('[data-markreview-text-start]');
+      if (!sourceSpan) {
+        return undefined;
+      }
+
+      const sourceStart = Number(sourceSpan.dataset.markreviewTextStart);
+      if (!Number.isFinite(sourceStart)) {
+        return undefined;
+      }
+
+      const prefixRange = document.createRange();
+      prefixRange.selectNodeContents(sourceSpan);
+      try {
+        prefixRange.setEnd(node, offset);
+      } catch {
+        return undefined;
+      }
+
+      return sourceStart + prefixRange.toString().length;
+    }
+
+    function showContextMenu(x, y) {
+      positionFloatingElement(contextMenu, x, y);
+      contextMenu.classList.add('is-open');
+      hideCommentComposer();
+    }
+
+    function hideContextMenu() {
+      contextMenu.classList.remove('is-open');
+    }
+
+    function showCommentComposer(x, y) {
+      if (!pendingSelection) {
+        return;
+      }
+
+      commentInput.value = '';
+      positionFloatingElement(commentComposer, x, y);
+      commentComposer.classList.add('is-open');
+      requestAnimationFrame(() => commentInput.focus());
+    }
+
+    function hideCommentComposer() {
+      commentComposer.classList.remove('is-open');
+      commentInput.value = '';
+    }
+
+    function positionFloatingElement(element, x, y) {
+      element.style.left = '0px';
+      element.style.top = '0px';
+      element.classList.add('is-open');
+      const rect = element.getBoundingClientRect();
+      const left = Math.min(x, window.innerWidth - rect.width - 12);
+      const top = Math.min(y, window.innerHeight - rect.height - 12);
+      element.style.left = Math.max(12, left) + 'px';
+      element.style.top = Math.max(12, top) + 'px';
+    }
   </script>
 </body>
 </html>`;
@@ -367,9 +645,10 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 }
 
 interface WebviewMessage {
-  readonly type: 'reveal' | 'openSource';
+  readonly type: 'reveal' | 'openSource' | 'addComment';
   readonly startOffset?: number;
   readonly endOffset?: number;
+  readonly comment?: string;
 }
 
 function createNonce(): string {
