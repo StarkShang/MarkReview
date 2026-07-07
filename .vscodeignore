@@ -1,0 +1,10 @@
+﻿.vscode/**
+.vscode-test/**
+.git/**
+.github/**
+agents/**
+node_modules/**
+src/**
+*.vsix
+*.log
+.DS_Store

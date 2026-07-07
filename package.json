@@ -3,7 +3,7 @@
   "displayName": "MarkReview",
   "description": "%extension.description%",
   "version": "0.0.1",
-  "publisher": "markreview",
+  "publisher": "StarkShang",
   "private": true,
   "engines": {
     "vscode": "^1.90.0"
