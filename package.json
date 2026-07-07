@@ -11,20 +11,13 @@
   "categories": [
     "Other"
   ],
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#17485C",
+    "theme": "dark"
+  },
   "activationEvents": [
-    "onLanguage:markdown",
-    "onCommand:markReview.addComment",
-    "onCommand:markReview.replaceSuggestion",
-    "onCommand:markReview.delete",
-    "onCommand:markReview.addText",
-    "onCommand:markReview.cleanAcceptChanges",
-    "onCommand:markReview.exportAiPrompt",
-    "onCommand:markReview.openPreview",
-    "onCommand:markReview.openSource",
-    "onCommand:markReview.refreshComments",
-    "onCommand:markReview.revealReviewItem",
-    "onCommand:markReview.togglePreview",
-    "onView:markReview.comments"
+    "onLanguage:markdown"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -90,7 +83,7 @@
         {
           "id": "markReview",
           "title": "MarkReview",
-          "icon": "resources/markreview.svg"
+          "icon": "resources/icon.svg"
         }
       ]
     },
@@ -98,7 +91,8 @@
       "markReview": [
         {
           "id": "markReview.comments",
-          "name": " "
+          "name": " ",
+          "icon": "resources/markreview.svg"
         }
       ]
     },
@@ -180,5 +174,9 @@
   "devDependencies": {
     "@types/vscode": "^1.90.0",
     "typescript": "^5.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/StarkShang/MarkReview.git"
   }
 }

@@ -1,0 +1,31 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="background" x1="36" y1="30" x2="219" y2="226" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17202B"/>
+      <stop offset="0.56" stop-color="#17485C"/>
+      <stop offset="1" stop-color="#1D7370"/>
+    </linearGradient>
+    <linearGradient id="bubble" x1="99" y1="117" x2="201" y2="202" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#37D3C0"/>
+      <stop offset="1" stop-color="#1D9A88"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="14" y="14" width="228" height="228" rx="48" fill="url(#background)"/>
+  <path opacity="0.18" d="M29 178C68 142 104 127 143 132C180 136 209 156 232 191V222C232 227.523 227.523 232 222 232H67C49.327 232 35 217.673 35 200L29 178Z" fill="#061017"/>
+
+  <path opacity="0.22" d="M72 48H148L184 84V178C184 192.359 172.359 204 158 204H119L83 224L88 204H72C57.641 204 46 192.359 46 178V74C46 59.641 57.641 48 72 48Z" fill="#071119"/>
+  <path d="M70 38H148L180 70V174C180 185.046 171.046 194 160 194H70C58.954 194 50 185.046 50 174V58C50 46.954 58.954 38 70 38Z" fill="#F7FBFF"/>
+  <path d="M148 38V66C148 70.418 151.582 74 156 74H180L148 38Z" fill="#DDEDF2"/>
+  <path d="M148 38V66C148 70.418 151.582 74 156 74H180" stroke="#B7D2DA" stroke-width="3" stroke-linejoin="round"/>
+
+  <path d="M77 109V73L96 101L115 73V109" stroke="#255C72" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M77 130H141" stroke="#E05B5B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M83 130H135" stroke="#F7FBFF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M77 151H127" stroke="#2ABF8F" stroke-width="8" stroke-linecap="round"/>
+
+  <path opacity="0.22" d="M118 120H185C198.255 120 209 130.745 209 144V177C209 190.255 198.255 201 185 201H159L124 221L130 201H118C104.745 201 94 190.255 94 177V144C94 130.745 104.745 120 118 120Z" fill="#071119"/>
+  <path d="M114 112H184C197.255 112 208 122.745 208 136V174C208 187.255 197.255 198 184 198H158L126 218L131 198H114C100.745 198 90 187.255 90 174V136C90 122.745 100.745 112 114 112Z" fill="url(#bubble)"/>
+  <path d="M124 154L145 174L178 136" stroke="#F8FFFC" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path opacity="0.85" d="M109 129H143" stroke="#B7FFF4" stroke-width="6" stroke-linecap="round"/>
+</svg>
