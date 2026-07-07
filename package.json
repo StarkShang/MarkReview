@@ -1,0 +1,218 @@
+{
+  "name": "markreview",
+  "displayName": "MarkReview",
+  "description": "A small VS Code extension for Markdown review using CriticMarkup and AI-friendly single-file workflows.",
+  "version": "0.0.1",
+  "publisher": "markreview",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onCommand:markReview.addComment",
+    "onCommand:markReview.replaceSuggestion",
+    "onCommand:markReview.delete",
+    "onCommand:markReview.addText",
+    "onCommand:markReview.cleanAcceptChanges",
+    "onCommand:markReview.exportAiPrompt",
+    "onCommand:markReview.openPreview",
+    "onCommand:markReview.openSource",
+    "onCommand:markReview.refreshComments",
+    "onCommand:markReview.revealReviewItem",
+    "onView:markReview.comments"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "markReview.addComment",
+        "title": "MarkReview: Add Comment",
+        "icon": "$(comment-add)"
+      },
+      {
+        "command": "markReview.replaceSuggestion",
+        "title": "MarkReview: Replace Suggestion",
+        "icon": "$(replace)"
+      },
+      {
+        "command": "markReview.delete",
+        "title": "MarkReview: Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "markReview.addText",
+        "title": "MarkReview: Add Text",
+        "icon": "$(add)"
+      },
+      {
+        "command": "markReview.cleanAcceptChanges",
+        "title": "MarkReview: Clean / Accept Changes",
+        "icon": "$(check)"
+      },
+      {
+        "command": "markReview.exportAiPrompt",
+        "title": "MarkReview: Export AI Prompt",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "markReview.openPreview",
+        "title": "MarkReview: Open Preview",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "markReview.openSource",
+        "title": "MarkReview: Open Markdown Source",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "markReview.refreshComments",
+        "title": "MarkReview: Refresh Comments",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "markReview.revealReviewItem",
+        "title": "MarkReview: Reveal Review Item",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "markReview",
+          "title": "MarkReview",
+          "icon": "resources/markreview.svg"
+        }
+      ]
+    },
+    "views": {
+      "markReview": [
+        {
+          "id": "markReview.comments",
+          "name": "Review Items"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "markReview.comments",
+        "contents": "Open a Markdown source file to see CriticMarkup review items.\n[Open Markdown Source](command:markReview.openSource)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "markReview.revealReviewItem",
+          "when": "false"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "markReview.addComment",
+          "when": "editorLangId == markdown",
+          "group": "navigation@1"
+        },
+        {
+          "command": "markReview.replaceSuggestion",
+          "when": "editorLangId == markdown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "markReview.delete",
+          "when": "editorLangId == markdown",
+          "group": "navigation@3"
+        },
+        {
+          "command": "markReview.addText",
+          "when": "editorLangId == markdown",
+          "group": "navigation@4"
+        },
+        {
+          "command": "markReview.cleanAcceptChanges",
+          "when": "editorLangId == markdown",
+          "group": "navigation@5"
+        },
+        {
+          "command": "markReview.exportAiPrompt",
+          "when": "editorLangId == markdown",
+          "group": "navigation@6"
+        },
+        {
+          "command": "markReview.openPreview",
+          "when": "editorLangId == markdown",
+          "group": "navigation@7"
+        },
+        {
+          "command": "markReview.openSource",
+          "when": "activeWebviewPanelId == markReview.preview",
+          "group": "navigation@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "markReview.openSource",
+          "when": "view == markReview.comments",
+          "group": "navigation@1"
+        },
+        {
+          "command": "markReview.openPreview",
+          "when": "view == markReview.comments",
+          "group": "navigation@2"
+        },
+        {
+          "command": "markReview.addComment",
+          "when": "view == markReview.comments",
+          "group": "navigation@3"
+        },
+        {
+          "command": "markReview.replaceSuggestion",
+          "when": "view == markReview.comments",
+          "group": "navigation@4"
+        },
+        {
+          "command": "markReview.delete",
+          "when": "view == markReview.comments",
+          "group": "navigation@5"
+        },
+        {
+          "command": "markReview.addText",
+          "when": "view == markReview.comments",
+          "group": "navigation@6"
+        },
+        {
+          "command": "markReview.cleanAcceptChanges",
+          "when": "view == markReview.comments",
+          "group": "navigation@7"
+        },
+        {
+          "command": "markReview.exportAiPrompt",
+          "when": "view == markReview.comments",
+          "group": "navigation@8"
+        },
+        {
+          "command": "markReview.refreshComments",
+          "when": "view == markReview.comments",
+          "group": "navigation@9"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "markReview.revealReviewItem",
+          "when": "view == markReview.comments && viewItem == markReviewReviewItem",
+          "group": "inline@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+
+# Test output
+.vscode-test/
+coverage/
+
+# Packaged VS Code extensions
+*.vsix
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local editor state
+.vscode/settings.json
+
+# Local environment files
+.env
+.env.*
+
+# Agent process artifacts
+agents/
