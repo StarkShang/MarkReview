@@ -23,6 +23,7 @@
     "onCommand:markReview.openSource",
     "onCommand:markReview.refreshComments",
     "onCommand:markReview.revealReviewItem",
+    "onCommand:markReview.togglePreview",
     "onView:markReview.comments"
   ],
   "main": "./dist/extension.js",
@@ -69,6 +70,11 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "markReview.togglePreview",
+        "title": "MarkReview: Toggle Source/Preview",
+        "icon": "$(preview)"
+      },
+      {
         "command": "markReview.refreshComments",
         "title": "MarkReview: Refresh Comments",
         "icon": "$(refresh)"
@@ -92,7 +98,7 @@
       "markReview": [
         {
           "id": "markReview.comments",
-          "name": "Review Items"
+          "name": " "
         }
       ]
     },
@@ -116,86 +122,46 @@
           "group": "navigation@1"
         },
         {
-          "command": "markReview.replaceSuggestion",
+          "command": "markReview.cleanAcceptChanges",
           "when": "editorLangId == markdown",
           "group": "navigation@2"
         },
         {
-          "command": "markReview.delete",
+          "command": "markReview.exportAiPrompt",
           "when": "editorLangId == markdown",
           "group": "navigation@3"
         },
         {
-          "command": "markReview.addText",
+          "command": "markReview.togglePreview",
           "when": "editorLangId == markdown",
           "group": "navigation@4"
         },
         {
-          "command": "markReview.cleanAcceptChanges",
-          "when": "editorLangId == markdown",
-          "group": "navigation@5"
-        },
-        {
-          "command": "markReview.exportAiPrompt",
-          "when": "editorLangId == markdown",
-          "group": "navigation@6"
-        },
-        {
-          "command": "markReview.openPreview",
-          "when": "editorLangId == markdown",
-          "group": "navigation@7"
-        },
-        {
-          "command": "markReview.openSource",
+          "command": "markReview.togglePreview",
           "when": "activeWebviewPanelId == markReview.preview",
           "group": "navigation@1"
         }
       ],
       "view/title": [
         {
-          "command": "markReview.openSource",
+          "command": "markReview.togglePreview",
           "when": "view == markReview.comments",
           "group": "navigation@1"
         },
         {
-          "command": "markReview.openPreview",
+          "command": "markReview.addComment",
           "when": "view == markReview.comments",
           "group": "navigation@2"
         },
         {
-          "command": "markReview.addComment",
+          "command": "markReview.cleanAcceptChanges",
           "when": "view == markReview.comments",
           "group": "navigation@3"
         },
         {
-          "command": "markReview.replaceSuggestion",
-          "when": "view == markReview.comments",
-          "group": "navigation@4"
-        },
-        {
-          "command": "markReview.delete",
-          "when": "view == markReview.comments",
-          "group": "navigation@5"
-        },
-        {
-          "command": "markReview.addText",
-          "when": "view == markReview.comments",
-          "group": "navigation@6"
-        },
-        {
-          "command": "markReview.cleanAcceptChanges",
-          "when": "view == markReview.comments",
-          "group": "navigation@7"
-        },
-        {
           "command": "markReview.exportAiPrompt",
           "when": "view == markReview.comments",
-          "group": "navigation@8"
-        },
-        {
-          "command": "markReview.refreshComments",
-          "when": "view == markReview.comments",
-          "group": "navigation@9"
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [

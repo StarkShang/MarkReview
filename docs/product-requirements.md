@@ -10,7 +10,7 @@ MarkReview 第一版追求小而可用：围绕选中文本插入 CriticMarkup �
 
 - 让 Markdown 用户可以像使用 Word 批注一样快速标记问题和修改建议。
 - 保持批注、修订和正文在同一个 Markdown 文件中，降低用户与 AI 协作的沟通成本。
-- 让 Codex 能直接读取带 CriticMarkup 的 Markdown，并根据批注输出干净 Markdown。
+- 让 Codex 能直接读取带 CriticMarkup 批注的 Markdown，根据批注直接修改正文，并保留原批注供用户回看。
 - 第一版只覆盖最核心的写作审阅闭环，不引入复杂状态管理。
 
 ## 核心产品判断
@@ -77,7 +77,7 @@ MarkReview 第一版追求小而可用：围绕选中文本插入 CriticMarkup �
 | `MarkReview: Delete` | 选中文本 | `{--选中文本--}` | 选区被删除标记包裹；未选中文本时不修改文档。 |
 | `MarkReview: Add Text` | 光标位置，输入新增内容 | `{++新增内容++}` | 新增标记插入到当前光标位置；输入为空时不修改文档。 |
 | `MarkReview: Clean / Accept Changes` | 当前 Markdown 文档 | 干净 Markdown | 保留新增内容；删除删除标记内容；使用替换建议的新内容；对批注标记给出第一版明确处理策略。 |
-| `MarkReview: Export AI Prompt` | 当前 Markdown 文档或当前编辑上下文 | AI 提示词 | 生成包含 CriticMarkup 规则、处理要求和输出要求的稳定提示词。 |
+| `MarkReview: Export AI Prompt` | 当前 Markdown 文档路径 | AI 提示词 | 生成中文提示词，包含原文文件地址，要求 AI 直接修改正文、不新增 CriticMarkup 修订标记、保留原批注，并通过 Git diff 查看修改。 |
 
 ## Clean / Accept Changes 第一版策略
 

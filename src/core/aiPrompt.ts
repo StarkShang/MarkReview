@@ -1,36 +1,23 @@
-export function buildAiPrompt(markdown: string): string {
-  const markdownFence = createMarkdownFence(markdown);
-
+export function buildAiPrompt(markdownSourcePath: string): string {
   return [
-    'You are a careful Markdown editing assistant. Update the Markdown document according to the CriticMarkup markers and output clean Markdown.',
+    '你是一个谨慎的 Markdown 修改助手。请读取下面的 Markdown 原文文件，根据其中的 CriticMarkup 批注直接修改文件内容。',
     '',
-    'CriticMarkup rules:',
-    '- {++added text++} means added text. Keep the added text and remove the marker.',
-    '- {--deleted text--} means deleted text. Remove this text and remove the marker.',
-    '- {~~old text~>new text~~} means replacement. Use the new text and remove the marker.',
-    '- {==marked text==}{>>comment<<} means a review comment. Rewrite the marked text according to the comment and remove both markers.',
+    '原文文件地址：',
+    markdownSourcePath,
     '',
-    'Requirements:',
-    '- Output only the final clean Markdown.',
-    '- Do not keep any CriticMarkup markers.',
-    '- Preserve Markdown structure, including headings, lists, tables, blockquotes, code blocks, links, and images.',
-    '- Do not rewrite unrelated text unless a small adjustment is needed for local coherence.',
-    '- If a comment is ambiguous, choose the most conservative edit that fits the surrounding context.',
+    'CriticMarkup 规则：',
+    '- {++新增内容++} 表示已有新增建议。',
+    '- {--删除内容--} 表示已有删除建议。',
+    '- {~~旧内容~>新内容~~} 表示已有替换建议。',
+    '- {==被标记内容==}{>>批注意见<<} 表示已有批注。',
     '',
-    'Markdown document:',
-    '',
-    `${markdownFence}markdown`,
-    markdown,
-    markdownFence
+    '处理要求：',
+    '- 直接修改上述 Markdown 文件，不要另外输出一份带修改标记的版本。',
+    '- 修改正文时不要新增 CriticMarkup 标记；新增、删除、替换都直接改正文，差异由 Git 查看。',
+    '- 保留原有批注标记，尤其是 {==被标记内容==}{>>批注意见<<}；如果根据批注改写了被标记内容，只更新 {==...==} 内的正文，并保留 {>>...<<} 批注意见。',
+    '- 对已有 {++...++}、{--...--}、{~~...~>...~~} 修订建议，如决定接受，请直接改成最终正文并移除这些修订标记。',
+    '- 保持标题、列表、表格、引用、代码块、链接和图片等 Markdown 结构。',
+    '- 不要改写无关内容，除非为了局部语义连贯需要做很小调整。',
+    '- 如果批注意见不明确，采用最保守、最贴近上下文的修改。'
   ].join('\n');
-}
-
-function createMarkdownFence(markdown: string): string {
-  const fenceMatches = markdown.match(/`{3,}/g) ?? [];
-  const longestFenceLength = fenceMatches.reduce(
-    (longestLength, fence) => Math.max(longestLength, fence.length),
-    3
-  );
-
-  return '`'.repeat(longestFenceLength + 1);
 }

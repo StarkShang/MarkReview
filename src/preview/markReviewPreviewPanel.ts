@@ -37,7 +37,17 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     this.panel?.dispose();
   }
 
+  public async togglePreview(): Promise<void> {
+    if (this.panel?.active) {
+      await this.sourceTracker.openMarkdownSource();
+      return;
+    }
+
+    await this.openPreview();
+  }
+
   public async openPreview(): Promise<void> {
+    const viewColumn = this.getPreviewViewColumn();
     const document = await this.getPreviewDocument();
     if (!document) {
       return;
@@ -50,7 +60,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       this.panel = vscode.window.createWebviewPanel(
         'markReview.preview',
         'MarkReview Preview',
-        vscode.ViewColumn.Beside,
+        viewColumn,
         {
           enableScripts: true,
           retainContextWhenHidden: true
@@ -66,8 +76,14 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       });
     }
 
-    this.panel.reveal(vscode.ViewColumn.Beside);
+    this.panel.reveal(viewColumn);
     this.update();
+  }
+
+  private getPreviewViewColumn(): vscode.ViewColumn {
+    const editor = this.sourceTracker.getActiveOrVisibleMarkdownEditor();
+
+    return editor?.viewColumn ?? this.panel?.viewColumn ?? vscode.ViewColumn.Active;
   }
 
   private async getPreviewDocument(): Promise<vscode.TextDocument | undefined> {

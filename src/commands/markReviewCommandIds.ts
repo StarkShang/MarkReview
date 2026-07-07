@@ -8,6 +8,7 @@ export const MarkReviewCommandId = {
   OpenPreview: 'markReview.openPreview',
   OpenSource: 'markReview.openSource',
   RefreshComments: 'markReview.refreshComments',
+  TogglePreview: 'markReview.togglePreview',
   RevealReviewItem: 'markReview.revealReviewItem'
 } as const;
 

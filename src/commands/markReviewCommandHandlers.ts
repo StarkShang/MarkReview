@@ -113,7 +113,7 @@ export class MarkReviewCommandHandlers {
       return;
     }
 
-    const prompt = buildAiPrompt(editor.document.getText());
+    const prompt = buildAiPrompt(getDocumentSourceReference(editor.document));
 
     await vscode.env.clipboard.writeText(prompt);
 
@@ -150,4 +150,10 @@ export class MarkReviewCommandHandlers {
 
 function hasMeaningfulInput(value: string | undefined): value is string {
   return value !== undefined && value.trim().length > 0;
+}
+
+function getDocumentSourceReference(document: vscode.TextDocument): string {
+  return document.uri.scheme === 'file'
+    ? document.uri.fsPath
+    : document.uri.toString();
 }

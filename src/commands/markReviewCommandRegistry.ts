@@ -38,6 +38,9 @@ export function registerMarkReviewCommands(
     vscode.commands.registerCommand(MarkReviewCommandId.OpenSource, () =>
       handlers.openSource()
     ),
+    vscode.commands.registerCommand(MarkReviewCommandId.TogglePreview, () =>
+      previewPanel.togglePreview()
+    ),
     vscode.commands.registerCommand(MarkReviewCommandId.RefreshComments, () =>
       treeDataProvider.refresh()
     ),
