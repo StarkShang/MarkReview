@@ -8,6 +8,7 @@ import {
   markDeletedText,
   markReplacementText
 } from '../core/criticMarkup';
+import { localize } from '../i18n/markReviewLocalization';
 import { MarkReviewRevealTarget } from '../review/markReviewRevealTarget';
 import {
   getWholeDocumentRange,
@@ -25,8 +26,8 @@ export class MarkReviewCommandHandlers {
     }
 
     const comment = await vscode.window.showInputBox({
-      prompt: 'Enter the review comment',
-      placeHolder: 'Explain what should be changed'
+      prompt: localize('input.addComment.prompt'),
+      placeHolder: localize('input.addComment.placeholder')
     });
 
     if (!hasMeaningfulInput(comment)) {
@@ -45,8 +46,8 @@ export class MarkReviewCommandHandlers {
     }
 
     const replacement = await vscode.window.showInputBox({
-      prompt: 'Enter the replacement suggestion',
-      placeHolder: 'Replacement text'
+      prompt: localize('input.replaceSuggestion.prompt'),
+      placeHolder: localize('input.replaceSuggestion.placeholder')
     });
 
     if (!hasMeaningfulInput(replacement)) {
@@ -74,8 +75,8 @@ export class MarkReviewCommandHandlers {
     }
 
     const addedText = await vscode.window.showInputBox({
-      prompt: 'Enter the text to add',
-      placeHolder: 'New text'
+      prompt: localize('input.addText.prompt'),
+      placeHolder: localize('input.addText.placeholder')
     });
 
     if (!hasMeaningfulInput(addedText)) {
@@ -98,7 +99,7 @@ export class MarkReviewCommandHandlers {
     const cleanedText = cleanCriticMarkupMarkdown(currentText);
 
     if (cleanedText === currentText) {
-      void vscode.window.showInformationMessage('MarkReview: No CriticMarkup changes found.');
+      void vscode.window.showInformationMessage(localize('message.noCriticMarkupChanges'));
       return;
     }
 
@@ -123,7 +124,7 @@ export class MarkReviewCommandHandlers {
     });
 
     await vscode.window.showTextDocument(promptDocument, { preview: false });
-    void vscode.window.showInformationMessage('MarkReview: AI prompt copied to clipboard.');
+    void vscode.window.showInformationMessage(localize('message.aiPromptCopied'));
   }
 
   public async openSource(): Promise<void> {

@@ -1,0 +1,15 @@
+{
+  "extension.description": "A small VS Code extension for Markdown review using CriticMarkup and AI-friendly single-file workflows.",
+  "command.addComment": "MarkReview: Add Comment",
+  "command.replaceSuggestion": "MarkReview: Replace Suggestion",
+  "command.delete": "MarkReview: Delete",
+  "command.addText": "MarkReview: Add Text",
+  "command.cleanAcceptChanges": "MarkReview: Clean / Accept Changes",
+  "command.exportAiPrompt": "MarkReview: Export AI Prompt",
+  "command.openPreview": "MarkReview: Open Preview",
+  "command.openSource": "MarkReview: Open Markdown Source",
+  "command.togglePreview": "MarkReview: Toggle Source/Preview",
+  "command.refreshComments": "MarkReview: Refresh Comments",
+  "command.revealReviewItem": "MarkReview: Reveal Review Item",
+  "viewsWelcome.comments": "Open a Markdown source file to see CriticMarkup review items.\n[Open Markdown Source](command:markReview.openSource)"
+}

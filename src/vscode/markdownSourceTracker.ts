@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 
+import { localize } from '../i18n/markReviewLocalization';
+
 export class MarkdownSourceTracker implements vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<vscode.Uri | undefined>();
   private lastMarkdownUri: vscode.Uri | undefined;
@@ -66,13 +68,13 @@ export class MarkdownSourceTracker implements vscode.Disposable {
 
     const uri = this.lastMarkdownUri ?? await this.pickMarkdownSourceUri();
     if (!uri) {
-      void vscode.window.showWarningMessage('MarkReview: Open a Markdown source file first.');
+      void vscode.window.showWarningMessage(localize('message.openMarkdownSourceFileFirst'));
       return undefined;
     }
 
     const document = await vscode.workspace.openTextDocument(uri);
     if (document.languageId !== 'markdown') {
-      void vscode.window.showWarningMessage('MarkReview: The selected file is not Markdown.');
+      void vscode.window.showWarningMessage(localize('message.selectedFileNotMarkdown'));
       return undefined;
     }
 
@@ -130,7 +132,7 @@ export class MarkdownSourceTracker implements vscode.Disposable {
         uri
       })),
       {
-        placeHolder: 'Select a Markdown source file'
+        placeHolder: localize('quickPick.selectMarkdownSourceFile')
       }
     );
 

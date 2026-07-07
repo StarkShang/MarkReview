@@ -1,15 +1,17 @@
 import * as vscode from 'vscode';
 
+import { localize } from '../i18n/markReviewLocalization';
+
 export function getActiveMarkdownEditor(): vscode.TextEditor | undefined {
   const editor = vscode.window.activeTextEditor;
 
   if (!editor) {
-    void vscode.window.showWarningMessage('MarkReview: Open a Markdown editor first.');
+    void vscode.window.showWarningMessage(localize('message.openMarkdownEditorFirst'));
     return undefined;
   }
 
   if (editor.document.languageId !== 'markdown') {
-    void vscode.window.showWarningMessage('MarkReview: The active editor is not Markdown.');
+    void vscode.window.showWarningMessage(localize('message.activeEditorNotMarkdown'));
     return undefined;
   }
 
@@ -31,7 +33,7 @@ export async function replaceNonEmptySelections(
   const selections = editor.selections.filter((selection) => !selection.isEmpty);
 
   if (selections.length === 0) {
-    void vscode.window.showWarningMessage('MarkReview: Select Markdown text first.');
+    void vscode.window.showWarningMessage(localize('message.selectMarkdownTextFirst'));
     return false;
   }
 

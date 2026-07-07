@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { MarkReviewCommandId } from '../commands/markReviewCommandIds';
 import { markCommentedText } from '../core/criticMarkup';
 import { renderMarkdownPreviewContent } from '../core/markdownPreviewRenderer';
+import { localize } from '../i18n/markReviewLocalization';
 import { MarkdownSourceTracker } from '../vscode/markdownSourceTracker';
 
 export class MarkReviewPreviewPanel implements vscode.Disposable {
@@ -59,7 +60,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     if (!this.panel) {
       this.panel = vscode.window.createWebviewPanel(
         'markReview.preview',
-        'MarkReview Preview',
+        localize('preview.title'),
         viewColumn,
         {
           enableScripts: true,
@@ -155,7 +156,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       return;
     }
 
-    this.panel.title = `MarkReview Preview: ${vscode.workspace.asRelativePath(this.document.uri)}`;
+    this.panel.title = `${localize('preview.title')}: ${vscode.workspace.asRelativePath(this.document.uri)}`;
     this.panel.webview.html = this.createHtml(this.panel.webview, this.document);
   }
 
@@ -163,6 +164,12 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     const nonce = createNonce();
     const content = renderMarkdownPreviewContent(document.getText());
     const title = escapeHtml(vscode.workspace.asRelativePath(document.uri));
+    const addCommentLabel = escapeHtml(localize('preview.addComment'));
+    const cancelLabel = escapeHtml(localize('preview.cancel'));
+    const commentMenuLabel = escapeHtml(localize('preview.commentMenu'));
+    const commentPlaceholder = escapeHtml(localize('preview.commentPlaceholder'));
+    const previewTitle = escapeHtml(localize('preview.title'));
+    const sourceLabel = escapeHtml(localize('preview.source'));
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -170,7 +177,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MarkReview Preview</title>
+  <title>${previewTitle}</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -290,13 +297,19 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       width: 100%;
       min-height: 84px;
       resize: vertical;
-      border: 1px solid var(--vscode-input-border, var(--vscode-editorWidget-border));
+      border: 1px solid rgba(255, 255, 255, 0.72);
       border-radius: 4px;
       padding: 8px;
       color: var(--vscode-input-foreground);
       background: var(--vscode-input-background);
       font: inherit;
       line-height: 1.45;
+    }
+
+    .mr-comment-composer textarea:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.24);
     }
 
     .mr-comment-composer-actions {
@@ -454,20 +467,20 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 </head>
 <body>
   <div class="mr-context-menu" data-role="context-menu">
-    <button type="button" data-command="addComment">Add Comment</button>
+    <button type="button" data-command="addComment">${commentMenuLabel}</button>
   </div>
   <div class="mr-comment-composer" data-role="comment-composer">
-    <textarea data-role="comment-input" placeholder="Write a comment..."></textarea>
+    <textarea data-role="comment-input" placeholder="${commentPlaceholder}"></textarea>
     <div class="mr-comment-composer-actions">
-      <button class="mr-comment-cancel" type="button" data-command="cancelComment">Cancel</button>
-      <button class="mr-comment-submit" type="button" data-command="submitComment">Add Comment</button>
+      <button class="mr-comment-cancel" type="button" data-command="cancelComment">${cancelLabel}</button>
+      <button class="mr-comment-submit" type="button" data-command="submitComment">${addCommentLabel}</button>
     </div>
   </div>
   <main class="mr-shell">
     <header class="mr-toolbar">
       <div class="mr-title">${title}</div>
       <div class="mr-toolbar-actions">
-        <button class="mr-toolbar-button" type="button" data-command="openSource">Source</button>
+        <button class="mr-toolbar-button" type="button" data-command="openSource">${sourceLabel}</button>
       </div>
     </header>
     <article class="mr-document">${content}</article>

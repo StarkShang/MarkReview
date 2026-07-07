@@ -49,7 +49,7 @@ function collectCommentPairs(
       kind: 'Comment',
       startOffset: match.index,
       endOffset: match.index + match[0].length,
-      label: `Comment: ${truncateText(commentText)}`,
+      label: truncateText(commentText),
       detail: truncateText(markedText, 120)
     });
   }
@@ -72,7 +72,7 @@ function collectReplacementItems(
       kind: 'Replacement',
       startOffset: match.index,
       endOffset: match.index + match[0].length,
-      label: `Replace: ${truncateText(normalizeInlineText(match[1]))}`,
+      label: truncateText(normalizeInlineText(match[1])),
       detail: truncateText(normalizeInlineText(match[2]), 120)
     });
   }
@@ -95,7 +95,7 @@ function collectDeletionItems(
       kind: 'Deletion',
       startOffset: match.index,
       endOffset: match.index + match[0].length,
-      label: `Delete: ${truncateText(normalizeInlineText(match[1]))}`,
+      label: truncateText(normalizeInlineText(match[1])),
       detail: 'Deletion suggestion'
     });
   }
@@ -118,7 +118,7 @@ function collectAdditionItems(
       kind: 'Addition',
       startOffset: match.index,
       endOffset: match.index + match[0].length,
-      label: `Add: ${truncateText(normalizeInlineText(match[1]))}`,
+      label: truncateText(normalizeInlineText(match[1])),
       detail: 'Addition suggestion'
     });
   }
@@ -141,7 +141,7 @@ function collectStandaloneCommentItems(
       kind: 'StandaloneComment',
       startOffset: match.index,
       endOffset: match.index + match[0].length,
-      label: `Comment: ${truncateText(normalizeInlineText(match[1]))}`,
+      label: truncateText(normalizeInlineText(match[1])),
       detail: 'Standalone comment'
     });
   }
@@ -164,7 +164,7 @@ function collectStandaloneHighlightItems(
       kind: 'Highlight',
       startOffset: match.index,
       endOffset: match.index + match[0].length,
-      label: `Highlight: ${truncateText(normalizeInlineText(match[1]))}`,
+      label: truncateText(normalizeInlineText(match[1])),
       detail: 'Marked text without a comment'
     });
   }

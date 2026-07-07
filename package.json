@@ -1,7 +1,7 @@
 {
   "name": "markreview",
   "displayName": "MarkReview",
-  "description": "A small VS Code extension for Markdown review using CriticMarkup and AI-friendly single-file workflows.",
+  "description": "%extension.description%",
   "version": "0.0.1",
   "publisher": "markreview",
   "private": true,
@@ -31,57 +31,57 @@
     "commands": [
       {
         "command": "markReview.addComment",
-        "title": "MarkReview: Add Comment",
+        "title": "%command.addComment%",
         "icon": "$(comment-add)"
       },
       {
         "command": "markReview.replaceSuggestion",
-        "title": "MarkReview: Replace Suggestion",
+        "title": "%command.replaceSuggestion%",
         "icon": "$(replace)"
       },
       {
         "command": "markReview.delete",
-        "title": "MarkReview: Delete",
+        "title": "%command.delete%",
         "icon": "$(trash)"
       },
       {
         "command": "markReview.addText",
-        "title": "MarkReview: Add Text",
+        "title": "%command.addText%",
         "icon": "$(add)"
       },
       {
         "command": "markReview.cleanAcceptChanges",
-        "title": "MarkReview: Clean / Accept Changes",
+        "title": "%command.cleanAcceptChanges%",
         "icon": "$(check)"
       },
       {
         "command": "markReview.exportAiPrompt",
-        "title": "MarkReview: Export AI Prompt",
+        "title": "%command.exportAiPrompt%",
         "icon": "$(sparkle)"
       },
       {
         "command": "markReview.openPreview",
-        "title": "MarkReview: Open Preview",
+        "title": "%command.openPreview%",
         "icon": "$(preview)"
       },
       {
         "command": "markReview.openSource",
-        "title": "MarkReview: Open Markdown Source",
+        "title": "%command.openSource%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "markReview.togglePreview",
-        "title": "MarkReview: Toggle Source/Preview",
+        "title": "%command.togglePreview%",
         "icon": "$(preview)"
       },
       {
         "command": "markReview.refreshComments",
-        "title": "MarkReview: Refresh Comments",
+        "title": "%command.refreshComments%",
         "icon": "$(refresh)"
       },
       {
         "command": "markReview.revealReviewItem",
-        "title": "MarkReview: Reveal Review Item",
+        "title": "%command.revealReviewItem%",
         "icon": "$(go-to-file)"
       }
     ],
@@ -105,7 +105,7 @@
     "viewsWelcome": [
       {
         "view": "markReview.comments",
-        "contents": "Open a Markdown source file to see CriticMarkup review items.\n[Open Markdown Source](command:markReview.openSource)"
+        "contents": "%viewsWelcome.comments%"
       }
     ],
     "menus": {
