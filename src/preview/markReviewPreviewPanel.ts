@@ -4,11 +4,13 @@ import { MarkReviewCommandId } from '../commands/markReviewCommandIds';
 import { markCommentedText } from '../core/criticMarkup';
 import { renderMarkdownPreviewContent } from '../core/markdownPreviewRenderer';
 import { localize } from '../i18n/markReviewLocalization';
+import { MarkReviewRevealTarget } from '../review/markReviewRevealTarget';
 import { MarkdownSourceTracker } from '../vscode/markdownSourceTracker';
 
 export class MarkReviewPreviewPanel implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
   private document: vscode.TextDocument | undefined;
+  private pendingRevealTarget: MarkReviewRevealTarget | undefined;
 
   public constructor(private readonly sourceTracker: MarkdownSourceTracker) {}
 
@@ -48,11 +50,47 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
   }
 
   public async openPreview(): Promise<void> {
-    const viewColumn = this.getPreviewViewColumn();
     const document = await this.getPreviewDocument();
     if (!document) {
       return;
     }
+
+    this.openPreviewDocument(document);
+  }
+
+  public async revealReviewItem(target: MarkReviewRevealTarget | undefined): Promise<void> {
+    if (!target) {
+      await this.openPreview();
+      return;
+    }
+
+    const document = await vscode.workspace.openTextDocument(target.uri);
+    if (document.languageId !== 'markdown') {
+      return;
+    }
+
+    this.pendingRevealTarget = target;
+    this.openPreviewDocument(document);
+  }
+
+  private getPreviewViewColumn(): vscode.ViewColumn {
+    const editor = this.sourceTracker.getActiveOrVisibleMarkdownEditor();
+
+    return editor?.viewColumn ?? this.panel?.viewColumn ?? vscode.ViewColumn.Active;
+  }
+
+  private async getPreviewDocument(): Promise<vscode.TextDocument | undefined> {
+    const document = await this.sourceTracker.getTrackedMarkdownDocument();
+    if (document) {
+      return document;
+    }
+
+    const editor = await this.sourceTracker.openMarkdownSource();
+    return editor?.document;
+  }
+
+  private openPreviewDocument(document: vscode.TextDocument): void {
+    const viewColumn = this.getPreviewViewColumn();
 
     this.document = document;
     this.sourceTracker.rememberDocument(document);
@@ -81,33 +119,13 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     this.update();
   }
 
-  private getPreviewViewColumn(): vscode.ViewColumn {
-    const editor = this.sourceTracker.getActiveOrVisibleMarkdownEditor();
-
-    return editor?.viewColumn ?? this.panel?.viewColumn ?? vscode.ViewColumn.Active;
-  }
-
-  private async getPreviewDocument(): Promise<vscode.TextDocument | undefined> {
-    const document = await this.sourceTracker.getTrackedMarkdownDocument();
-    if (document) {
-      return document;
-    }
-
-    const editor = await this.sourceTracker.openMarkdownSource();
-    return editor?.document;
-  }
-
   private async handleMessage(message: WebviewMessage): Promise<void> {
     if (!this.document) {
       return;
     }
 
     if (message.type === 'reveal') {
-      await vscode.commands.executeCommand(MarkReviewCommandId.RevealReviewItem, {
-        uri: this.document.uri,
-        startOffset: message.startOffset,
-        endOffset: message.endOffset
-      });
+      await this.revealSourceRange(message.startOffset, message.endOffset);
       return;
     }
 
@@ -119,6 +137,24 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     if (message.type === 'addComment') {
       await this.addCommentFromPreview(message);
     }
+  }
+
+  private async revealSourceRange(
+    startOffset: number | undefined,
+    endOffset: number | undefined
+  ): Promise<void> {
+    if (!this.document || startOffset === undefined || endOffset === undefined) {
+      return;
+    }
+
+    const startPosition = this.document.positionAt(startOffset);
+    const endPosition = this.document.positionAt(endOffset);
+    const range = new vscode.Range(startPosition, endPosition);
+    const editor = await vscode.window.showTextDocument(this.document, { preview: false });
+
+    this.sourceTracker.rememberDocument(this.document);
+    editor.selection = new vscode.Selection(startPosition, endPosition);
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
   }
 
   private async addCommentFromPreview(message: WebviewMessage): Promise<void> {
@@ -157,12 +193,27 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     }
 
     this.panel.title = `${localize('preview.title')}: ${vscode.workspace.asRelativePath(this.document.uri)}`;
-    this.panel.webview.html = this.createHtml(this.panel.webview, this.document);
+    this.panel.webview.html = this.createHtml(
+      this.panel.webview,
+      this.document,
+      this.pendingRevealTarget
+    );
+    this.pendingRevealTarget = undefined;
   }
 
-  private createHtml(webview: vscode.Webview, document: vscode.TextDocument): string {
+  private createHtml(
+    webview: vscode.Webview,
+    document: vscode.TextDocument,
+    revealTarget: MarkReviewRevealTarget | undefined
+  ): string {
     const nonce = createNonce();
     const content = renderMarkdownPreviewContent(document.getText());
+    const initialRevealTarget = revealTarget
+      ? JSON.stringify({
+        startOffset: revealTarget.startOffset,
+        endOffset: revealTarget.endOffset
+      })
+      : 'undefined';
     const title = escapeHtml(vscode.workspace.asRelativePath(document.uri));
     const addCommentLabel = escapeHtml(localize('preview.addComment'));
     const cancelLabel = escapeHtml(localize('preview.cancel'));
@@ -444,6 +495,13 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       display: none;
     }
 
+    .mr-hidden-comment.mr-active {
+      display: inline;
+      color: var(--vscode-descriptionForeground);
+      background: rgba(255, 213, 77, 0.2);
+      font-style: italic;
+    }
+
     .mr-replacement {
       background: rgba(163, 113, 247, 0.16);
     }
@@ -490,8 +548,15 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     const contextMenu = document.querySelector('[data-role="context-menu"]');
     const commentComposer = document.querySelector('[data-role="comment-composer"]');
     const commentInput = document.querySelector('[data-role="comment-input"]');
+    const initialRevealTarget = ${initialRevealTarget};
     let pendingSelection = undefined;
     let pendingPoint = { x: 0, y: 0 };
+
+    if (initialRevealTarget) {
+      requestAnimationFrame(() => {
+        revealReviewItem(initialRevealTarget.startOffset, initialRevealTarget.endOffset);
+      });
+    }
 
     document.addEventListener('contextmenu', (event) => {
       const selectionRange = getSelectedSourceRange();
@@ -600,6 +665,41 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
         startOffset: Math.min(anchorOffset, focusOffset),
         endOffset: Math.max(anchorOffset, focusOffset)
       };
+    }
+
+    function revealReviewItem(startOffset, endOffset) {
+      const target = findReviewTarget(startOffset, endOffset);
+      if (!target) {
+        return;
+      }
+
+      document.querySelectorAll('.mr-active').forEach((element) => {
+        element.classList.remove('mr-active');
+      });
+      target.classList.add('mr-active');
+      target.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+        behavior: 'smooth'
+      });
+    }
+
+    function findReviewTarget(startOffset, endOffset) {
+      const marks = Array.from(document.querySelectorAll('[data-markreview-start]'));
+      const exactMatch = marks.find((element) =>
+        Number(element.dataset.markreviewStart) === startOffset &&
+        Number(element.dataset.markreviewEnd) === endOffset
+      );
+      if (exactMatch) {
+        return exactMatch;
+      }
+
+      return marks.find((element) => {
+        const markStartOffset = Number(element.dataset.markreviewStart);
+        const markEndOffset = Number(element.dataset.markreviewEnd);
+
+        return startOffset < markEndOffset && endOffset > markStartOffset;
+      });
     }
 
     function getSourceOffset(node, offset) {

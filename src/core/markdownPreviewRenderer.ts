@@ -319,7 +319,7 @@ function tryRenderCriticMarkup(
         'mr-hidden-comment',
         baseOffset + index,
         baseOffset + endIndex + 3,
-        '',
+        renderPlainInline(text.slice(index + 3, endIndex)),
         endIndex + 3
       );
     }

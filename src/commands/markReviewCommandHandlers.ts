@@ -9,7 +9,6 @@ import {
   markReplacementText
 } from '../core/criticMarkup';
 import { localize } from '../i18n/markReviewLocalization';
-import { MarkReviewRevealTarget } from '../review/markReviewRevealTarget';
 import {
   getWholeDocumentRange,
   replaceNonEmptySelections
@@ -129,23 +128,6 @@ export class MarkReviewCommandHandlers {
 
   public async openSource(): Promise<void> {
     await this.sourceTracker.openMarkdownSource();
-  }
-
-  public async revealReviewItem(target: MarkReviewRevealTarget | undefined): Promise<void> {
-    if (!target) {
-      await this.openSource();
-      return;
-    }
-
-    const document = await vscode.workspace.openTextDocument(target.uri);
-    const editor = await vscode.window.showTextDocument(document, { preview: false });
-    const startPosition = document.positionAt(target.startOffset);
-    const endPosition = document.positionAt(target.endOffset);
-    const range = new vscode.Range(startPosition, endPosition);
-
-    this.sourceTracker.rememberDocument(document);
-    editor.selection = new vscode.Selection(startPosition, endPosition);
-    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
   }
 }
 

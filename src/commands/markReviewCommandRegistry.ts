@@ -45,7 +45,7 @@ export function registerMarkReviewCommands(
       treeDataProvider.refresh()
     ),
     vscode.commands.registerCommand(MarkReviewCommandId.RevealReviewItem, (target) =>
-      handlers.revealReviewItem(target)
+      previewPanel.revealReviewItem(target)
     )
   );
 }
