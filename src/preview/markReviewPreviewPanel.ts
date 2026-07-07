@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 
-import { MarkReviewCommandId } from '../commands/markReviewCommandIds';
 import { markCommentedText } from '../core/criticMarkup';
 import { renderMarkdownPreviewContent } from '../core/markdownPreviewRenderer';
 import { localize } from '../i18n/markReviewLocalization';
@@ -8,41 +7,49 @@ import { MarkReviewRevealTarget } from '../review/markReviewRevealTarget';
 import { MarkdownSourceTracker } from '../vscode/markdownSourceTracker';
 
 export class MarkReviewPreviewPanel implements vscode.Disposable {
-  private panel: vscode.WebviewPanel | undefined;
-  private document: vscode.TextDocument | undefined;
-  private pendingRevealTarget: MarkReviewRevealTarget | undefined;
+  private readonly previewStates = new Map<string, MarkReviewPreviewState>();
 
   public constructor(private readonly sourceTracker: MarkdownSourceTracker) {}
 
   public start(): vscode.Disposable {
+    void Promise.resolve().then(() => {
+      this.openPreviewForActiveMarkdownSource();
+    });
+
     return vscode.Disposable.from(
       vscode.workspace.onDidChangeTextDocument((event) => {
-        if (this.document && event.document.uri.toString() === this.document.uri.toString()) {
-          this.document = event.document;
-          this.update();
-        }
-      }),
-      this.sourceTracker.onDidChangeMarkdownSource(async () => {
-        if (!this.panel) {
+        if (event.document.languageId !== 'markdown') {
           return;
         }
 
-        const document = await this.sourceTracker.getTrackedMarkdownDocument();
-        if (document) {
-          this.document = document;
-          this.update();
+        const previewState = this.previewStates.get(getPreviewStateKey(event.document.uri));
+        if (!previewState) {
+          return;
         }
+
+        previewState.document = event.document;
+        this.updatePreviewState(previewState);
+      }),
+      this.sourceTracker.onDidChangeMarkdownSource(() => {
+        this.openPreviewForActiveMarkdownSource();
       })
     );
   }
 
   public dispose(): void {
-    this.panel?.dispose();
+    for (const previewState of this.previewStates.values()) {
+      previewState.panel.dispose();
+    }
+
+    this.previewStates.clear();
   }
 
   public async togglePreview(): Promise<void> {
-    if (this.panel?.active) {
-      await this.sourceTracker.openMarkdownSource();
+    const activePreviewState = this.getActivePreviewState();
+    if (activePreviewState) {
+      await this.revealSourceDocument(activePreviewState.document, undefined, {
+        viewColumn: activePreviewState.panel.viewColumn ?? vscode.ViewColumn.Beside
+      });
       return;
     }
 
@@ -55,7 +62,32 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       return;
     }
 
-    this.openPreviewDocument(document);
+    await this.revealSourceDocument(document, undefined, {
+      preserveFocus: true,
+      viewColumn: this.getSourceViewColumn(document)
+    });
+
+    this.openPreviewDocument(document, {
+      viewColumn: vscode.ViewColumn.Beside
+    });
+  }
+
+  public async openSource(): Promise<void> {
+    const activePreviewState = this.getActivePreviewState();
+    if (activePreviewState) {
+      await this.revealSourceDocument(activePreviewState.document, undefined, {
+        viewColumn: activePreviewState.panel.viewColumn ?? vscode.ViewColumn.Beside
+      });
+      return;
+    }
+
+    const document = this.sourceTracker.getActiveMarkdownDocument();
+    if (document) {
+      await this.revealSourceDocument(document);
+      return;
+    }
+
+    await this.sourceTracker.openMarkdownSource({ allowFallbackToTrackedSource: true });
   }
 
   public async revealReviewItem(target: MarkReviewRevealTarget | undefined): Promise<void> {
@@ -69,96 +101,232 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       return;
     }
 
-    this.pendingRevealTarget = target;
-    this.openPreviewDocument(document);
+    const range = getSourceRange(document, target);
+    const didRevealSource = this.revealVisibleSourceEditors(document, range);
+    const previewState = this.previewStates.get(getPreviewStateKey(document.uri));
+    const didRevealPreview = this.revealVisiblePreview(previewState, target);
+
+    if (didRevealSource || didRevealPreview) {
+      this.sourceTracker.rememberDocument(document);
+      return;
+    }
+
+    await this.revealSourceDocument(document, range, {
+      preserveFocus: true,
+      viewColumn: vscode.ViewColumn.Active
+    });
+    this.openPreviewDocument(document, {
+      revealTarget: target,
+      viewColumn: vscode.ViewColumn.Beside
+    });
   }
 
-  private getPreviewViewColumn(): vscode.ViewColumn {
-    const editor = this.sourceTracker.getActiveOrVisibleMarkdownEditor();
+  private getActivePreviewState(): MarkReviewPreviewState | undefined {
+    return Array.from(this.previewStates.values()).find((previewState) =>
+      previewState.panel.active
+    );
+  }
 
-    return editor?.viewColumn ?? this.panel?.viewColumn ?? vscode.ViewColumn.Active;
+  private getSourceViewColumn(document: vscode.TextDocument): vscode.ViewColumn {
+    const activeEditor = this.sourceTracker.getActiveMarkdownEditor();
+    if (activeEditor?.document.uri.toString() === document.uri.toString()) {
+      return activeEditor.viewColumn ?? vscode.ViewColumn.Active;
+    }
+
+    const visibleEditor = this.findVisibleSourceEditors(document)[0];
+    return visibleEditor?.viewColumn ?? vscode.ViewColumn.Active;
+  }
+
+  private openPreviewForActiveMarkdownSource(): void {
+    const editor = this.sourceTracker.getActiveMarkdownEditor();
+    if (!editor) {
+      return;
+    }
+
+    this.openPreviewDocument(editor.document, {
+      preserveFocus: true,
+      viewColumn: vscode.ViewColumn.Beside
+    });
   }
 
   private async getPreviewDocument(): Promise<vscode.TextDocument | undefined> {
-    const document = await this.sourceTracker.getTrackedMarkdownDocument();
+    const document = this.sourceTracker.getActiveMarkdownDocument();
     if (document) {
       return document;
     }
 
-    const editor = await this.sourceTracker.openMarkdownSource();
+    const editor = await this.sourceTracker.openMarkdownSource({ allowFallbackToTrackedSource: true });
     return editor?.document;
   }
 
-  private openPreviewDocument(document: vscode.TextDocument): void {
-    const viewColumn = this.getPreviewViewColumn();
+  private openPreviewDocument(
+    document: vscode.TextDocument,
+    options: OpenPreviewDocumentOptions = {}
+  ): void {
+    const previewStateKey = getPreviewStateKey(document.uri);
+    let previewState = this.previewStates.get(previewStateKey);
+    const viewColumn = options.viewColumn ?? vscode.ViewColumn.Beside;
 
-    this.document = document;
     this.sourceTracker.rememberDocument(document);
 
-    if (!this.panel) {
-      this.panel = vscode.window.createWebviewPanel(
-        'markReview.preview',
-        localize('preview.title'),
-        viewColumn,
-        {
-          enableScripts: true,
-          retainContextWhenHidden: true
-        }
-      );
-
-      this.panel.onDidDispose(() => {
-        this.panel = undefined;
-      });
-
-      this.panel.webview.onDidReceiveMessage((message: WebviewMessage) => {
-        void this.handleMessage(message);
-      });
+    if (!previewState) {
+      previewState = this.createPreviewState(previewStateKey, document, viewColumn, options);
+      this.previewStates.set(previewStateKey, previewState);
+    } else {
+      previewState.document = document;
+      previewState.panel.reveal(viewColumn, options.preserveFocus);
     }
 
-    this.panel.reveal(viewColumn);
-    this.update();
+    previewState.revealTarget = options.revealTarget;
+    this.updatePreviewState(previewState);
   }
 
-  private async handleMessage(message: WebviewMessage): Promise<void> {
-    if (!this.document) {
-      return;
-    }
+  private createPreviewState(
+    key: string,
+    document: vscode.TextDocument,
+    viewColumn: vscode.ViewColumn,
+    options: OpenPreviewDocumentOptions
+  ): MarkReviewPreviewState {
+    const panel = vscode.window.createWebviewPanel(
+      'markReview.preview',
+      localize('preview.title'),
+      {
+        preserveFocus: options.preserveFocus,
+        viewColumn
+      },
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true
+      }
+    );
 
+    const previewState: MarkReviewPreviewState = {
+      document,
+      key,
+      panel
+    };
+
+    panel.onDidDispose(() => {
+      this.previewStates.delete(key);
+    });
+
+    panel.onDidChangeViewState((event) => {
+      if (event.webviewPanel.active) {
+        this.sourceTracker.rememberDocument(previewState.document);
+      }
+    });
+
+    panel.webview.onDidReceiveMessage((message: WebviewMessage) => {
+      void this.handleMessage(previewState, message);
+    });
+
+    return previewState;
+  }
+
+  private async handleMessage(
+    previewState: MarkReviewPreviewState,
+    message: WebviewMessage
+  ): Promise<void> {
     if (message.type === 'reveal') {
-      await this.revealSourceRange(message.startOffset, message.endOffset);
+      await this.revealSourceRange(previewState, message.startOffset, message.endOffset);
       return;
     }
 
     if (message.type === 'openSource') {
-      await vscode.commands.executeCommand(MarkReviewCommandId.OpenSource);
+      await this.revealSourceDocument(previewState.document, undefined, {
+        viewColumn: previewState.panel.viewColumn ?? vscode.ViewColumn.Beside
+      });
       return;
     }
 
     if (message.type === 'addComment') {
-      await this.addCommentFromPreview(message);
+      await this.addCommentFromPreview(previewState, message);
     }
   }
 
   private async revealSourceRange(
+    previewState: MarkReviewPreviewState,
     startOffset: number | undefined,
     endOffset: number | undefined
   ): Promise<void> {
-    if (!this.document || startOffset === undefined || endOffset === undefined) {
+    if (startOffset === undefined || endOffset === undefined) {
       return;
     }
 
-    const startPosition = this.document.positionAt(startOffset);
-    const endPosition = this.document.positionAt(endOffset);
-    const range = new vscode.Range(startPosition, endPosition);
-    const editor = await vscode.window.showTextDocument(this.document, { preview: false });
+    const document = previewState.document;
+    const range = new vscode.Range(
+      document.positionAt(startOffset),
+      document.positionAt(endOffset)
+    );
 
-    this.sourceTracker.rememberDocument(this.document);
-    editor.selection = new vscode.Selection(startPosition, endPosition);
-    editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    if (this.revealVisibleSourceEditors(document, range)) {
+      return;
+    }
+
+    await this.revealSourceDocument(document, range, {
+      viewColumn: previewState.panel.viewColumn ?? vscode.ViewColumn.Beside
+    });
   }
 
-  private async addCommentFromPreview(message: WebviewMessage): Promise<void> {
-    if (!this.document || message.startOffset === undefined || message.endOffset === undefined) {
+  private async revealSourceDocument(
+    document: vscode.TextDocument,
+    range?: vscode.Range,
+    options: RevealSourceDocumentOptions = {}
+  ): Promise<vscode.TextEditor> {
+    const editor = await vscode.window.showTextDocument(document, {
+      preserveFocus: options.preserveFocus,
+      preview: false,
+      viewColumn: options.viewColumn ?? vscode.ViewColumn.Active
+    });
+
+    this.sourceTracker.rememberDocument(document);
+
+    if (range) {
+      editor.selection = new vscode.Selection(range.start, range.end);
+      editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    }
+
+    return editor;
+  }
+
+  private revealVisibleSourceEditors(
+    document: vscode.TextDocument,
+    range: vscode.Range
+  ): boolean {
+    const editors = this.findVisibleSourceEditors(document);
+    for (const editor of editors) {
+      editor.selection = new vscode.Selection(range.start, range.end);
+      editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    }
+
+    return editors.length > 0;
+  }
+
+  private revealVisiblePreview(
+    previewState: MarkReviewPreviewState | undefined,
+    target: MarkReviewRevealTarget
+  ): boolean {
+    if (!previewState?.panel.visible) {
+      return false;
+    }
+
+    previewState.revealTarget = target;
+    this.updatePreviewState(previewState);
+    return true;
+  }
+
+  private findVisibleSourceEditors(document: vscode.TextDocument): vscode.TextEditor[] {
+    return vscode.window.visibleTextEditors.filter((editor) =>
+      editor.document.uri.toString() === document.uri.toString()
+    );
+  }
+
+  private async addCommentFromPreview(
+    previewState: MarkReviewPreviewState,
+    message: WebviewMessage
+  ): Promise<void> {
+    const document = previewState.document;
+    if (message.startOffset === undefined || message.endOffset === undefined) {
       return;
     }
 
@@ -174,31 +342,27 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     }
 
     const range = new vscode.Range(
-      this.document.positionAt(startOffset),
-      this.document.positionAt(endOffset)
+      document.positionAt(startOffset),
+      document.positionAt(endOffset)
     );
-    const selectedText = this.document.getText(range);
+    const selectedText = document.getText(range);
     if (selectedText.trim().length === 0) {
       return;
     }
 
     const edit = new vscode.WorkspaceEdit();
-    edit.replace(this.document.uri, range, markCommentedText(selectedText, comment));
+    edit.replace(document.uri, range, markCommentedText(selectedText, comment));
     await vscode.workspace.applyEdit(edit);
   }
 
-  private update(): void {
-    if (!this.panel || !this.document) {
-      return;
-    }
-
-    this.panel.title = `${localize('preview.title')}: ${vscode.workspace.asRelativePath(this.document.uri)}`;
-    this.panel.webview.html = this.createHtml(
-      this.panel.webview,
-      this.document,
-      this.pendingRevealTarget
+  private updatePreviewState(previewState: MarkReviewPreviewState): void {
+    previewState.panel.title = localize('preview.title') + ': ' + vscode.workspace.asRelativePath(previewState.document.uri);
+    previewState.panel.webview.html = this.createHtml(
+      previewState.panel.webview,
+      previewState.document,
+      previewState.revealTarget
     );
-    this.pendingRevealTarget = undefined;
+    previewState.revealTarget = undefined;
   }
 
   private createHtml(
@@ -209,12 +373,11 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     const nonce = createNonce();
     const content = renderMarkdownPreviewContent(document.getText());
     const initialRevealTarget = revealTarget
-      ? JSON.stringify({
+      ? escapeScriptJson({
         startOffset: revealTarget.startOffset,
         endOffset: revealTarget.endOffset
       })
       : 'undefined';
-    const title = escapeHtml(vscode.workspace.asRelativePath(document.uri));
     const addCommentLabel = escapeHtml(localize('preview.addComment'));
     const cancelLabel = escapeHtml(localize('preview.cancel'));
     const commentMenuLabel = escapeHtml(localize('preview.commentMenu'));
@@ -249,50 +412,6 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       padding: 28px 44px 56px;
     }
 
-    .mr-toolbar {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin: -28px -44px 28px;
-      padding: 10px 44px;
-      border-bottom: 1px solid var(--vscode-editorWidget-border);
-      background: var(--vscode-editor-background);
-    }
-
-    .mr-title {
-      min-width: 0;
-      overflow: hidden;
-      color: var(--vscode-descriptionForeground);
-      font-size: 12px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .mr-toolbar-actions {
-      display: flex;
-      flex: 0 0 auto;
-      gap: 8px;
-    }
-
-    .mr-toolbar-button {
-      border: 1px solid var(--vscode-button-border, transparent);
-      border-radius: 4px;
-      padding: 4px 8px;
-      color: var(--vscode-button-foreground);
-      background: var(--vscode-button-background);
-      font: inherit;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
-    .mr-toolbar-button:hover {
-      background: var(--vscode-button-hoverBackground);
-    }
-
     .mr-context-menu {
       position: fixed;
       z-index: 30;
@@ -325,6 +444,10 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     .mr-context-menu button:hover {
       background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
       color: var(--vscode-menu-selectionForeground, var(--vscode-editor-foreground));
+    }
+
+    .mr-context-menu button.is-hidden {
+      display: none;
     }
 
     .mr-comment-composer {
@@ -525,7 +648,8 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 </head>
 <body>
   <div class="mr-context-menu" data-role="context-menu">
-    <button type="button" data-command="addComment">${commentMenuLabel}</button>
+    <button type="button" data-command="openSource">${sourceLabel}</button>
+    <button type="button" data-role="add-comment-menu-item" data-command="addComment">${commentMenuLabel}</button>
   </div>
   <div class="mr-comment-composer" data-role="comment-composer">
     <textarea data-role="comment-input" placeholder="${commentPlaceholder}"></textarea>
@@ -535,12 +659,6 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     </div>
   </div>
   <main class="mr-shell">
-    <header class="mr-toolbar">
-      <div class="mr-title">${title}</div>
-      <div class="mr-toolbar-actions">
-        <button class="mr-toolbar-button" type="button" data-command="openSource">${sourceLabel}</button>
-      </div>
-    </header>
     <article class="mr-document">${content}</article>
   </main>
   <script nonce="${nonce}">
@@ -548,6 +666,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     const contextMenu = document.querySelector('[data-role="context-menu"]');
     const commentComposer = document.querySelector('[data-role="comment-composer"]');
     const commentInput = document.querySelector('[data-role="comment-input"]');
+    const addCommentMenuItem = document.querySelector('[data-role="add-comment-menu-item"]');
     const initialRevealTarget = ${initialRevealTarget};
     let pendingSelection = undefined;
     let pendingPoint = { x: 0, y: 0 };
@@ -560,14 +679,11 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 
     document.addEventListener('contextmenu', (event) => {
       const selectionRange = getSelectedSourceRange();
-      if (!selectionRange) {
-        hideContextMenu();
-        return;
-      }
 
       event.preventDefault();
       pendingSelection = selectionRange;
       pendingPoint = { x: event.clientX, y: event.clientY };
+      addCommentMenuItem.classList.toggle('is-hidden', !selectionRange);
       showContextMenu(event.clientX, event.clientY);
     });
 
@@ -575,6 +691,12 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       const commandTarget = event.target instanceof Element
         ? event.target.closest('[data-command]')
         : null;
+
+      if (commandTarget?.dataset.command === 'openSource') {
+        hideContextMenu();
+        vscode.postMessage({ type: 'openSource' });
+        return;
+      }
 
       if (commandTarget?.dataset.command === 'addComment') {
         hideContextMenu();
@@ -589,11 +711,6 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 
       if (commandTarget?.dataset.command === 'submitComment') {
         submitComment();
-        return;
-      }
-
-      if (commandTarget?.dataset.command === 'openSource') {
-        vscode.postMessage({ type: 'openSource' });
         return;
       }
 
@@ -773,6 +890,24 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
   }
 }
 
+interface MarkReviewPreviewState {
+  document: vscode.TextDocument;
+  readonly key: string;
+  readonly panel: vscode.WebviewPanel;
+  revealTarget?: MarkReviewRevealTarget;
+}
+
+interface OpenPreviewDocumentOptions {
+  readonly preserveFocus?: boolean;
+  readonly revealTarget?: MarkReviewRevealTarget;
+  readonly viewColumn?: vscode.ViewColumn;
+}
+
+interface RevealSourceDocumentOptions {
+  readonly preserveFocus?: boolean;
+  readonly viewColumn?: vscode.ViewColumn;
+}
+
 interface WebviewMessage {
   readonly type: 'reveal' | 'openSource' | 'addComment';
   readonly startOffset?: number;
@@ -798,4 +933,25 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function escapeScriptJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+function getPreviewStateKey(uri: vscode.Uri): string {
+  return uri.toString();
+}
+
+function getSourceRange(
+  document: vscode.TextDocument,
+  target: MarkReviewRevealTarget
+): vscode.Range {
+  return new vscode.Range(
+    document.positionAt(target.startOffset),
+    document.positionAt(target.endOffset)
+  );
 }

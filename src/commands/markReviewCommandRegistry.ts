@@ -36,7 +36,7 @@ export function registerMarkReviewCommands(
       previewPanel.openPreview()
     ),
     vscode.commands.registerCommand(MarkReviewCommandId.OpenSource, () =>
-      handlers.openSource()
+      previewPanel.openSource()
     ),
     vscode.commands.registerCommand(MarkReviewCommandId.TogglePreview, () =>
       previewPanel.togglePreview()

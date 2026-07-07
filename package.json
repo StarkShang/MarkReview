@@ -83,7 +83,7 @@
         {
           "id": "markReview",
           "title": "MarkReview",
-          "icon": "resources/icon.svg"
+          "icon": "resources/markreview.svg"
         }
       ]
     },
@@ -139,22 +139,22 @@
       "view/title": [
         {
           "command": "markReview.togglePreview",
-          "when": "view == markReview.comments",
+          "when": "view == markReview.comments && markReview.hasActiveMarkdownSource",
           "group": "navigation@1"
         },
         {
           "command": "markReview.addComment",
-          "when": "view == markReview.comments",
+          "when": "view == markReview.comments && markReview.hasActiveMarkdownSource",
           "group": "navigation@2"
         },
         {
           "command": "markReview.cleanAcceptChanges",
-          "when": "view == markReview.comments",
+          "when": "view == markReview.comments && markReview.hasActiveMarkdownSource",
           "group": "navigation@3"
         },
         {
           "command": "markReview.exportAiPrompt",
-          "when": "view == markReview.comments",
+          "when": "view == markReview.comments && markReview.hasActiveMarkdownSource",
           "group": "navigation@4"
         }
       ],

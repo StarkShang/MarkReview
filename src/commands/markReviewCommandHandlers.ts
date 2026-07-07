@@ -127,7 +127,7 @@ export class MarkReviewCommandHandlers {
   }
 
   public async openSource(): Promise<void> {
-    await this.sourceTracker.openMarkdownSource();
+    await this.sourceTracker.openMarkdownSource({ allowFallbackToTrackedSource: true });
   }
 }
 

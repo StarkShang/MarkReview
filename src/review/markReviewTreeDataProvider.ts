@@ -52,7 +52,7 @@ implements vscode.TreeDataProvider<MarkReviewTreeItem>, vscode.Disposable {
   }
 
   public async getChildren(): Promise<MarkReviewTreeItem[]> {
-    const document = await this.sourceTracker.getTrackedMarkdownDocument();
+    const document = this.sourceTracker.getActiveMarkdownDocument();
     if (!document) {
       return [];
     }
