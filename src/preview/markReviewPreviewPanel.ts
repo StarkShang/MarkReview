@@ -212,7 +212,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 
     panel.onDidChangeViewState((event) => {
       if (event.webviewPanel.active) {
-        this.sourceTracker.rememberDocument(previewState.document);
+        this.activatePreviewSource(previewState);
       }
     });
 
@@ -227,6 +227,11 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     previewState: MarkReviewPreviewState,
     message: WebviewMessage
   ): Promise<void> {
+    if (message.type === 'activate') {
+      this.activatePreviewSource(previewState);
+      return;
+    }
+
     if (message.type === 'reveal') {
       await this.revealSourceRange(previewState, message.startOffset, message.endOffset);
       return;
@@ -242,6 +247,12 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     if (message.type === 'addComment') {
       await this.addCommentFromPreview(previewState, message);
     }
+  }
+
+  private activatePreviewSource(previewState: MarkReviewPreviewState): void {
+    this.sourceTracker.rememberDocument(previewState.document, {
+      forceChangeEvent: true
+    });
   }
 
   private async revealSourceRange(
@@ -671,6 +682,16 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     let pendingSelection = undefined;
     let pendingPoint = { x: 0, y: 0 };
 
+    window.addEventListener('focus', () => {
+      vscode.postMessage({ type: 'activate' });
+    });
+
+    document.addEventListener('pointerdown', () => {
+      vscode.postMessage({ type: 'activate' });
+    });
+
+    vscode.postMessage({ type: 'activate' });
+
     if (initialRevealTarget) {
       requestAnimationFrame(() => {
         revealReviewItem(initialRevealTarget.startOffset, initialRevealTarget.endOffset);
@@ -909,7 +930,7 @@ interface RevealSourceDocumentOptions {
 }
 
 interface WebviewMessage {
-  readonly type: 'reveal' | 'openSource' | 'addComment';
+  readonly type: 'activate' | 'reveal' | 'openSource' | 'addComment';
   readonly startOffset?: number;
   readonly endOffset?: number;
   readonly comment?: string;

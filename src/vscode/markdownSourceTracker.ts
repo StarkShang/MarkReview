@@ -80,7 +80,10 @@ export class MarkdownSourceTracker implements vscode.Disposable {
     return vscode.window.showTextDocument(document, { preview: false });
   }
 
-  public rememberDocument(document: vscode.TextDocument): void {
+  public rememberDocument(
+    document: vscode.TextDocument,
+    options: RememberDocumentOptions = {}
+  ): void {
     const previousUri = this.activeMarkdownUri?.toString();
     const nextUri = document.uri.toString();
 
@@ -89,7 +92,7 @@ export class MarkdownSourceTracker implements vscode.Disposable {
     this.lastMarkdownUri = document.uri;
     this.setActiveMarkdownContext(true);
 
-    if (previousUri !== nextUri) {
+    if (previousUri !== nextUri || options.forceChangeEvent) {
       this.changeEmitter.fire(document.uri);
     }
   }
@@ -167,6 +170,10 @@ export class MarkdownSourceTracker implements vscode.Disposable {
 
 interface OpenMarkdownSourceOptions {
   readonly allowFallbackToTrackedSource?: boolean;
+}
+
+interface RememberDocumentOptions {
+  readonly forceChangeEvent?: boolean;
 }
 
 function isMarkdownEditor(
