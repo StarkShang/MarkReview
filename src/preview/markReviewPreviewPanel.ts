@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { removeCriticMarkupReviewItem } from '../core/cleanMarkdown';
 import { markCommentedText } from '../core/criticMarkup';
 import { renderMarkdownPreviewContent } from '../core/markdownPreviewRenderer';
 import { localize } from '../i18n/markReviewLocalization';
@@ -31,7 +32,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
         this.updatePreviewState(previewState);
       }),
       this.sourceTracker.onDidChangeMarkdownSource(() => {
-        if (this.getActivePreviewState()) {
+        if (this.previewStates.size > 0) {
           return;
         }
 
@@ -250,13 +251,16 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 
     if (message.type === 'addComment') {
       await this.addCommentFromPreview(previewState, message);
+      return;
+    }
+
+    if (message.type === 'deleteReviewItem') {
+      await this.deleteReviewItemFromPreview(previewState, message);
     }
   }
 
   private activatePreviewSource(previewState: MarkReviewPreviewState): void {
-    this.sourceTracker.rememberDocument(previewState.document, {
-      forceChangeEvent: true
-    });
+    this.sourceTracker.rememberDocument(previewState.document);
   }
 
   private async revealSourceRange(
@@ -370,6 +374,48 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     await vscode.workspace.applyEdit(edit);
   }
 
+  private async deleteReviewItemFromPreview(
+    previewState: MarkReviewPreviewState,
+    message: WebviewMessage
+  ): Promise<void> {
+    if (message.startOffset === undefined || message.endOffset === undefined) {
+      return;
+    }
+
+    const confirmLabel = localize('confirm.deleteReviewItem.confirm');
+    const picked = await vscode.window.showWarningMessage(
+      localize('confirm.deleteReviewItem.message'),
+      { modal: true },
+      confirmLabel
+    );
+    if (picked !== confirmLabel) {
+      return;
+    }
+
+    const document = previewState.document;
+    const currentText = document.getText();
+    const nextText = removeCriticMarkupReviewItem(
+      currentText,
+      message.startOffset,
+      message.endOffset
+    );
+    if (nextText === currentText) {
+      return;
+    }
+
+    const range = new vscode.Range(
+      document.positionAt(message.startOffset),
+      document.positionAt(message.endOffset)
+    );
+    const replacementText = nextText.slice(
+      message.startOffset,
+      nextText.length - (currentText.length - message.endOffset)
+    );
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(document.uri, range, replacementText);
+    await vscode.workspace.applyEdit(edit);
+  }
+
   private updatePreviewState(previewState: MarkReviewPreviewState): void {
     previewState.panel.title = localize('preview.title') + ': ' + vscode.workspace.asRelativePath(previewState.document.uri);
     previewState.panel.webview.html = this.createHtml(
@@ -396,6 +442,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     const addCommentLabel = escapeHtml(localize('preview.addComment'));
     const cancelLabel = escapeHtml(localize('preview.cancel'));
     const commentMenuLabel = escapeHtml(localize('preview.commentMenu'));
+    const deleteReviewItemLabel = escapeHtml(localize('preview.deleteReviewItem'));
     const commentPlaceholder = escapeHtml(localize('preview.commentPlaceholder'));
     const previewTitle = escapeHtml(localize('preview.title'));
     const sourceLabel = escapeHtml(localize('preview.source'));
@@ -665,6 +712,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
   <div class="mr-context-menu" data-role="context-menu">
     <button type="button" data-command="openSource">${sourceLabel}</button>
     <button type="button" data-role="add-comment-menu-item" data-command="addComment">${commentMenuLabel}</button>
+    <button type="button" data-role="delete-review-item-menu-item" data-command="deleteReviewItem">${deleteReviewItemLabel}</button>
   </div>
   <div class="mr-comment-composer" data-role="comment-composer">
     <textarea data-role="comment-input" placeholder="${commentPlaceholder}"></textarea>
@@ -682,7 +730,10 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     const commentComposer = document.querySelector('[data-role="comment-composer"]');
     const commentInput = document.querySelector('[data-role="comment-input"]');
     const addCommentMenuItem = document.querySelector('[data-role="add-comment-menu-item"]');
+    const deleteReviewItemMenuItem = document.querySelector('[data-role="delete-review-item-menu-item"]');
     const initialRevealTarget = ${initialRevealTarget};
+    let activeReviewItem = undefined;
+    let pendingReviewItem = undefined;
     let pendingSelection = undefined;
     let pendingPoint = { x: 0, y: 0 };
 
@@ -704,14 +755,35 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
 
     document.addEventListener('contextmenu', (event) => {
       const selectionRange = getSelectedSourceRange();
+      const reviewTarget = event.target instanceof Element
+        ? event.target.closest('[data-markreview-start]')
+        : null;
 
       event.preventDefault();
       pendingSelection = selectionRange;
+      pendingReviewItem = getReviewItemFromElement(reviewTarget);
       pendingPoint = { x: event.clientX, y: event.clientY };
       addCommentMenuItem.classList.toggle('is-hidden', !selectionRange);
+      deleteReviewItemMenuItem.classList.toggle('is-hidden', !pendingReviewItem);
+      if (reviewTarget) {
+        setActiveReviewItem(reviewTarget);
+      }
       showContextMenu(event.clientX, event.clientY);
     });
 
+    contextMenu.addEventListener('click', (event) => {
+      const commandTarget = event.target instanceof Element
+        ? event.target.closest('[data-command]')
+        : null;
+      if (commandTarget?.dataset.command !== 'deleteReviewItem') {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      hideContextMenu();
+      deleteReviewItem(pendingReviewItem ?? activeReviewItem);
+    }, true);
     document.addEventListener('click', (event) => {
       const commandTarget = event.target instanceof Element
         ? event.target.closest('[data-command]')
@@ -726,6 +798,12 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       if (commandTarget?.dataset.command === 'addComment') {
         hideContextMenu();
         showCommentComposer(pendingPoint.x, pendingPoint.y);
+        return;
+      }
+
+      if (commandTarget?.dataset.command === 'deleteReviewItem') {
+        hideContextMenu();
+        deleteReviewItem(pendingReviewItem ?? activeReviewItem);
         return;
       }
 
@@ -750,10 +828,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
         : null;
 
       if (target) {
-        document.querySelectorAll('.mr-active').forEach((element) => {
-          element.classList.remove('mr-active');
-        });
-        target.classList.add('mr-active');
+        setActiveReviewItem(target);
         vscode.postMessage({
           type: 'reveal',
           startOffset: Number(target.dataset.markreviewStart),
@@ -762,6 +837,20 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       }
     });
 
+    document.addEventListener('keydown', (event) => {
+      if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) {
+        return;
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (!activeReviewItem) {
+          return;
+        }
+
+        event.preventDefault();
+        deleteReviewItem(activeReviewItem);
+      }
+    });
     commentInput.addEventListener('keydown', (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();
@@ -773,6 +862,40 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
         hideCommentComposer();
       }
     });
+
+    function setActiveReviewItem(target) {
+      document.querySelectorAll('.mr-active').forEach((element) => {
+        element.classList.remove('mr-active');
+      });
+      target.classList.add('mr-active');
+      activeReviewItem = getReviewItemFromElement(target);
+    }
+
+    function getReviewItemFromElement(element) {
+      if (!element) {
+        return undefined;
+      }
+
+      const startOffset = Number(element.dataset.markreviewStart);
+      const endOffset = Number(element.dataset.markreviewEnd);
+      if (!Number.isFinite(startOffset) || !Number.isFinite(endOffset)) {
+        return undefined;
+      }
+
+      return { startOffset, endOffset };
+    }
+
+    function deleteReviewItem(reviewItem) {
+      if (!reviewItem) {
+        return;
+      }
+
+      vscode.postMessage({
+        type: 'deleteReviewItem',
+        startOffset: reviewItem.startOffset,
+        endOffset: reviewItem.endOffset
+      });
+    }
 
     function submitComment() {
       const comment = commentInput.value.trim();
@@ -815,10 +938,7 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
         return;
       }
 
-      document.querySelectorAll('.mr-active').forEach((element) => {
-        element.classList.remove('mr-active');
-      });
-      target.classList.add('mr-active');
+      setActiveReviewItem(target);
       target.scrollIntoView({
         block: 'center',
         inline: 'nearest',
@@ -934,7 +1054,7 @@ interface RevealSourceDocumentOptions {
 }
 
 interface WebviewMessage {
-  readonly type: 'activate' | 'reveal' | 'openSource' | 'addComment';
+  readonly type: 'activate' | 'reveal' | 'openSource' | 'addComment' | 'deleteReviewItem';
   readonly startOffset?: number;
   readonly endOffset?: number;
   readonly comment?: string;

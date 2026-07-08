@@ -1,8 +1,9 @@
-﻿{
+{
   "extension.description": "MarkReview is a lightweight VS Code extension that brings inline CriticMarkup review into Markdown, supporting AI-assisted, single-file editing: add comments, suggestions, and deletion markup directly in the document, then generate clean outputs without external sidecar comment storage.",
   "command.addComment": "MarkReview: Add Comment",
   "command.replaceSuggestion": "MarkReview: Replace Suggestion",
   "command.delete": "MarkReview: Delete",
+  "command.deleteReviewItem": "MarkReview: Delete Review Item",
   "command.addText": "MarkReview: Add Text",
   "command.cleanAcceptChanges": "MarkReview: Clean / Accept Changes",
   "command.exportAiPrompt": "MarkReview: Export AI Prompt",

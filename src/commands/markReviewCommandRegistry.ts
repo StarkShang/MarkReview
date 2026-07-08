@@ -11,7 +11,10 @@ export function registerMarkReviewCommands(
   treeDataProvider: MarkReviewTreeDataProvider,
   previewPanel: MarkReviewPreviewPanel
 ): vscode.Disposable {
-  const handlers = new MarkReviewCommandHandlers(sourceTracker);
+  const handlers = new MarkReviewCommandHandlers(
+    sourceTracker,
+    () => treeDataProvider.getSelectedReviewItem()
+  );
 
   return vscode.Disposable.from(
     vscode.commands.registerCommand(MarkReviewCommandId.AddComment, () =>
@@ -22,6 +25,9 @@ export function registerMarkReviewCommands(
     ),
     vscode.commands.registerCommand(MarkReviewCommandId.Delete, () =>
       handlers.delete()
+    ),
+    vscode.commands.registerCommand(MarkReviewCommandId.DeleteReviewItem, (target) =>
+      handlers.deleteReviewItem(target)
     ),
     vscode.commands.registerCommand(MarkReviewCommandId.AddText, () =>
       handlers.addText()

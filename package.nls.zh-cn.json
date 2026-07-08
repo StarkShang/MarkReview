@@ -3,6 +3,7 @@
   "command.addComment": "MarkReview: 添加批注",
   "command.replaceSuggestion": "MarkReview: 替换建议",
   "command.delete": "MarkReview: 删除标记",
+  "command.deleteReviewItem": "MarkReview: 删除批注项",
   "command.addText": "MarkReview: 新增文本",
   "command.cleanAcceptChanges": "MarkReview: 清理/接受修改",
   "command.exportAiPrompt": "MarkReview: 导出 AI 提示词",

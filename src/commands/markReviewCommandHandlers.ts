@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 
 import { buildAiPrompt } from '../core/aiPrompt';
-import { cleanCriticMarkupMarkdown } from '../core/cleanMarkdown';
+import {
+  cleanCriticMarkupMarkdown,
+  removeCriticMarkupReviewItem
+} from '../core/cleanMarkdown';
 import {
   markAddedText,
   markCommentedText,
@@ -9,6 +12,7 @@ import {
   markReplacementText
 } from '../core/criticMarkup';
 import { localize } from '../i18n/markReviewLocalization';
+import { MarkReviewRevealTarget } from '../review/markReviewRevealTarget';
 import {
   getWholeDocumentRange,
   replaceNonEmptySelections
@@ -16,7 +20,10 @@ import {
 import { MarkdownSourceTracker } from '../vscode/markdownSourceTracker';
 
 export class MarkReviewCommandHandlers {
-  public constructor(private readonly sourceTracker: MarkdownSourceTracker) {}
+  public constructor(
+    private readonly sourceTracker: MarkdownSourceTracker,
+    private readonly getSelectedReviewItem: () => MarkReviewRevealTarget | undefined = () => undefined
+  ) {}
 
   public async addComment(): Promise<void> {
     const editor = await this.sourceTracker.openMarkdownSource();
@@ -65,6 +72,51 @@ export class MarkReviewCommandHandlers {
     }
 
     await replaceNonEmptySelections(editor, markDeletedText);
+  }
+
+  public async deleteReviewItem(target?: MarkReviewRevealTarget): Promise<void> {
+    const reviewItem = target ?? this.getSelectedReviewItem();
+    if (!reviewItem) {
+      return;
+    }
+
+    const confirmLabel = localize('confirm.deleteReviewItem.confirm');
+    const picked = await vscode.window.showWarningMessage(
+      localize('confirm.deleteReviewItem.message'),
+      { modal: true },
+      confirmLabel
+    );
+    if (picked !== confirmLabel) {
+      return;
+    }
+
+    const document = await vscode.workspace.openTextDocument(reviewItem.uri);
+    if (document.languageId !== 'markdown') {
+      return;
+    }
+
+    const currentText = document.getText();
+    const nextText = removeCriticMarkupReviewItem(
+      currentText,
+      reviewItem.startOffset,
+      reviewItem.endOffset
+    );
+    if (nextText === currentText) {
+      return;
+    }
+
+    const range = new vscode.Range(
+      document.positionAt(reviewItem.startOffset),
+      document.positionAt(reviewItem.endOffset)
+    );
+    const replacementText = nextText.slice(
+      reviewItem.startOffset,
+      nextText.length - (currentText.length - reviewItem.endOffset)
+    );
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(document.uri, range, replacementText);
+    await vscode.workspace.applyEdit(edit);
+    this.sourceTracker.rememberDocument(document);
   }
 
   public async addText(): Promise<void> {

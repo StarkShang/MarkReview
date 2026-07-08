@@ -13,6 +13,7 @@ export class MarkReviewTreeDataProvider
 implements vscode.TreeDataProvider<MarkReviewTreeItem>, vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<MarkReviewTreeItem | undefined>();
   private isRefreshQueued = false;
+  private selectedReviewItem: MarkReviewTreeItem | undefined;
 
   public readonly onDidChangeTreeData = this.changeEmitter.event;
 
@@ -33,6 +34,14 @@ implements vscode.TreeDataProvider<MarkReviewTreeItem>, vscode.Disposable {
 
   public dispose(): void {
     this.changeEmitter.dispose();
+  }
+
+  public setSelectedReviewItem(reviewItem: MarkReviewTreeItem | undefined): void {
+    this.selectedReviewItem = reviewItem;
+  }
+
+  public getSelectedReviewItem(): MarkReviewTreeItem | undefined {
+    return this.selectedReviewItem;
   }
 
   public refresh(): void {

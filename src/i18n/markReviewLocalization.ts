@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 
 const englishMessages = {
   'command.revealReviewItem': 'Reveal Review Item',
+  'confirm.deleteReviewItem.confirm': 'Delete',
+  'confirm.deleteReviewItem.message': 'Delete this review item?',
   'input.addComment.placeholder': 'Explain what should be changed',
   'input.addComment.prompt': 'Enter the review comment',
   'input.addText.placeholder': 'New text',
@@ -19,6 +21,7 @@ const englishMessages = {
   'preview.cancel': 'Cancel',
   'preview.commentMenu': 'Comment',
   'preview.commentPlaceholder': 'Write a comment...',
+  'preview.deleteReviewItem': 'Delete',
   'preview.source': 'Source',
   'preview.title': 'MarkReview Preview',
   'quickPick.selectMarkdownSourceFile': 'Select a Markdown source file',
@@ -36,6 +39,8 @@ const englishMessages = {
 
 const simplifiedChineseMessages: Record<MarkReviewLocalizationKey, string> = {
   'command.revealReviewItem': '定位批注项',
+  'confirm.deleteReviewItem.confirm': '删除',
+  'confirm.deleteReviewItem.message': '确定删除这条批注项吗？',
   'input.addComment.placeholder': '说明希望如何修改',
   'input.addComment.prompt': '输入批注意见',
   'input.addText.placeholder': '新增内容',
@@ -53,6 +58,7 @@ const simplifiedChineseMessages: Record<MarkReviewLocalizationKey, string> = {
   'preview.cancel': '取消',
   'preview.commentMenu': '批注',
   'preview.commentPlaceholder': '输入批注...',
+  'preview.deleteReviewItem': '删除',
   'preview.source': '源码',
   'preview.title': 'MarkReview 预览',
   'quickPick.selectMarkdownSourceFile': '选择 Markdown 原文文件',

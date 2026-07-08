@@ -38,6 +38,11 @@
         "icon": "$(trash)"
       },
       {
+        "command": "markReview.deleteReviewItem",
+        "title": "%command.deleteReviewItem%",
+        "icon": "$(trash)"
+      },
+      {
         "command": "markReview.addText",
         "title": "%command.addText%",
         "icon": "$(add)"
@@ -163,9 +168,22 @@
           "command": "markReview.revealReviewItem",
           "when": "view == markReview.comments && viewItem == markReviewReviewItem",
           "group": "inline@1"
+        },
+        {
+          "command": "markReview.deleteReviewItem",
+          "when": "view == markReview.comments && viewItem == markReviewReviewItem",
+          "group": "inline@2"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "markReview.deleteReviewItem",
+        "key": "delete",
+        "mac": "backspace",
+        "when": "focusedView == markReview.comments && markReview.hasActiveMarkdownSource"
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",

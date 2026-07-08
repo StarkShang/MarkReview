@@ -2,6 +2,7 @@ export const MarkReviewCommandId = {
   AddComment: 'markReview.addComment',
   ReplaceSuggestion: 'markReview.replaceSuggestion',
   Delete: 'markReview.delete',
+  DeleteReviewItem: 'markReview.deleteReviewItem',
   AddText: 'markReview.addText',
   CleanAcceptChanges: 'markReview.cleanAcceptChanges',
   ExportAiPrompt: 'markReview.exportAiPrompt',

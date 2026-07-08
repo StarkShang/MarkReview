@@ -25,6 +25,9 @@ export function activate(context: vscode.ExtensionContext): void {
     previewPanel,
     previewPanel.start(),
     treeView,
+    treeView.onDidChangeSelection((event) => {
+      treeDataProvider.setSelectedReviewItem(event.selection[0]);
+    }),
     registerMarkReviewCommands(sourceTracker, treeDataProvider, previewPanel)
   );
 }
