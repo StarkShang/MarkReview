@@ -31,6 +31,10 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
         this.updatePreviewState(previewState);
       }),
       this.sourceTracker.onDidChangeMarkdownSource(() => {
+        if (this.getActivePreviewState()) {
+          return;
+        }
+
         this.openPreviewForActiveMarkdownSource();
       })
     );
