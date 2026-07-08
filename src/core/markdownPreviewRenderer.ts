@@ -3,6 +3,12 @@ interface MarkdownLine {
   readonly startOffset: number;
 }
 
+interface ListMarker {
+  readonly indent: number;
+  readonly markerLength: number;
+  readonly ordered: boolean;
+}
+
 export function renderMarkdownPreviewContent(markdown: string): string {
   const lines = splitMarkdownLines(markdown);
   const blocks: string[] = [];
@@ -155,23 +161,107 @@ function renderList(
   lines: MarkdownLine[],
   startIndex: number
 ): { readonly html: string; readonly nextIndex: number } {
-  const ordered = /^\s*\d+\.\s+/.test(lines[startIndex].text);
+  const firstMarker = parseListMarker(lines[startIndex].text);
+  if (!firstMarker) {
+    return {
+      html: '',
+      nextIndex: startIndex + 1
+    };
+  }
+
+  return renderListAtIndent(lines, startIndex, firstMarker.indent, firstMarker.ordered);
+}
+
+function renderListAtIndent(
+  lines: MarkdownLine[],
+  startIndex: number,
+  indent: number,
+  ordered: boolean
+): { readonly html: string; readonly nextIndex: number } {
   const tagName = ordered ? 'ol' : 'ul';
   const items: string[] = [];
   let index = startIndex;
 
-  while (index < lines.length && isListLine(lines[index].text)) {
-    const marker = lines[index].text.match(/^\s*(?:[-*+] |\d+\.\s+)/);
-    const markerLength = marker?.[0].length ?? 0;
-    const itemText = lines[index].text.slice(markerLength);
-    items.push(`<li>${renderInlineMarkdown(itemText, lines[index].startOffset + markerLength)}</li>`);
+  while (index < lines.length) {
+    const marker = parseListMarker(lines[index].text);
+    if (!marker || marker.indent !== indent || marker.ordered !== ordered) {
+      break;
+    }
+
+    const itemHtml: string[] = [
+      renderInlineMarkdown(lines[index].text.slice(marker.markerLength), lines[index].startOffset + marker.markerLength)
+    ];
     index += 1;
+
+    while (index < lines.length) {
+      if (isBlankLine(lines[index].text)) {
+        const nextContentIndex = findNextContentLine(lines, index + 1);
+        if (nextContentIndex === -1) {
+          index += 1;
+          break;
+        }
+
+        const nextMarker = parseListMarker(lines[nextContentIndex].text);
+        if (!nextMarker) {
+          break;
+        }
+
+        if (nextMarker.indent > marker.indent) {
+          index = nextContentIndex;
+          continue;
+        }
+
+        index = nextContentIndex;
+        break;
+      }
+
+      const nextMarker = parseListMarker(lines[index].text);
+      if (!nextMarker) {
+        break;
+      }
+
+      if (nextMarker.indent <= marker.indent) {
+        break;
+      }
+
+      const nestedList = renderListAtIndent(lines, index, nextMarker.indent, nextMarker.ordered);
+      itemHtml.push(nestedList.html);
+      index = nestedList.nextIndex;
+    }
+
+    items.push(`<li>${itemHtml.join('')}</li>`);
   }
 
   return {
     html: `<${tagName}>${items.join('')}</${tagName}>`,
     nextIndex: index
   };
+}
+
+function parseListMarker(line: string): ListMarker | undefined {
+  const match = line.match(/^(\s*)(?:[-*+] |\d+\.\s+)/);
+  if (!match) {
+    return undefined;
+  }
+
+  return {
+    indent: match[1].length,
+    markerLength: match[0].length,
+    ordered: /\d+\.\s+$/.test(match[0])
+  };
+}
+
+function findNextContentLine(lines: MarkdownLine[], startIndex: number): number {
+  let index = startIndex;
+  while (index < lines.length) {
+    if (!isBlankLine(lines[index].text)) {
+      return index;
+    }
+
+    index += 1;
+  }
+
+  return -1;
 }
 
 function renderBlockquote(
@@ -401,7 +491,7 @@ function isTableStart(lines: MarkdownLine[], index: number): boolean {
 }
 
 function isListLine(line: string): boolean {
-  return /^\s*(?:[-*+] |\d+\.\s+)/.test(line);
+  return parseListMarker(line) !== undefined;
 }
 
 function isBlockBoundary(lines: MarkdownLine[], index: number): boolean {
