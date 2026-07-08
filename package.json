@@ -2,7 +2,7 @@
   "name": "markreview",
   "displayName": "MarkReview",
   "description": "%extension.description%",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "StarkShang",
   "private": true,
   "engines": {
