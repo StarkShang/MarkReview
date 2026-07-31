@@ -1,5 +1,28 @@
+import { parseCriticMarkupReviewItems } from './criticMarkupReviewItem';
+
 interface MarkdownLine {
   readonly text: string;
+  readonly startOffset: number;
+}
+
+interface MarkdownPreviewRenderContext {
+  readonly multilineComments: ReadonlyMap<number, MultilineCriticComment>;
+}
+
+interface MultilineCriticComment {
+  readonly commentText: string;
+  readonly endOffset: number;
+  readonly markedText?: string;
+  readonly startOffset: number;
+}
+
+interface PreparedMarkdownPreview {
+  readonly context: MarkdownPreviewRenderContext;
+  readonly markdown: string;
+}
+
+interface SourceRange {
+  readonly endOffset: number;
   readonly startOffset: number;
 }
 
@@ -10,7 +33,8 @@ interface ListMarker {
 }
 
 export function renderMarkdownPreviewContent(markdown: string): string {
-  const lines = splitMarkdownLines(markdown);
+  const preparedPreview = prepareMarkdownPreview(markdown);
+  const lines = splitMarkdownLines(preparedPreview.markdown);
   const blocks: string[] = [];
   let index = 0;
 
@@ -30,11 +54,18 @@ export function renderMarkdownPreviewContent(markdown: string): string {
       continue;
     }
 
+    const mathBlock = tryRenderMathBlock(lines, index);
+    if (mathBlock) {
+      blocks.push(mathBlock.html);
+      index = mathBlock.nextIndex;
+      continue;
+    }
+
     const heading = line.text.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       const level = heading[1].length;
       const contentOffset = line.startOffset + heading[1].length + 1;
-      blocks.push(`<h${level}>${renderInlineMarkdown(heading[2], contentOffset)}</h${level}>`);
+      blocks.push(`<h${level}>${renderInlineMarkdown(heading[2], contentOffset, preparedPreview.context)}</h${level}>`);
       index += 1;
       continue;
     }
@@ -46,32 +77,141 @@ export function renderMarkdownPreviewContent(markdown: string): string {
     }
 
     if (isTableStart(lines, index)) {
-      const result = renderTable(lines, index);
+      const result = renderTable(lines, index, preparedPreview.context);
       blocks.push(result.html);
       index = result.nextIndex;
       continue;
     }
 
     if (isListLine(line.text)) {
-      const result = renderList(lines, index);
+      const result = renderList(lines, index, preparedPreview.context);
       blocks.push(result.html);
       index = result.nextIndex;
       continue;
     }
 
     if (/^\s{0,3}>\s?/.test(line.text)) {
-      const result = renderBlockquote(lines, index);
+      const result = renderBlockquote(lines, index, preparedPreview.context);
       blocks.push(result.html);
       index = result.nextIndex;
       continue;
     }
 
-    const result = renderParagraph(lines, index);
+    const result = renderParagraph(lines, index, preparedPreview.context);
     blocks.push(result.html);
     index = result.nextIndex;
   }
 
   return blocks.join('\n');
+}
+
+function prepareMarkdownPreview(markdown: string): PreparedMarkdownPreview {
+  const characters = markdown.split('');
+  const multilineComments = new Map<number, MultilineCriticComment>();
+  const protectedRanges = collectProtectedBlockRanges(markdown);
+
+  for (const reviewItem of parseCriticMarkupReviewItems(markdown)) {
+    if (reviewItem.kind !== 'Comment' && reviewItem.kind !== 'StandaloneComment') {
+      continue;
+    }
+
+    if (isOffsetInRanges(reviewItem.startOffset, protectedRanges)) {
+      continue;
+    }
+
+    const source = markdown.slice(reviewItem.startOffset, reviewItem.endOffset);
+    const commentMarkerIndex = source.indexOf('{>>');
+    if (commentMarkerIndex === -1) {
+      continue;
+    }
+
+    const commentText = source.slice(commentMarkerIndex + 3, -3);
+    if (!/[\r\n]/.test(commentText)) {
+      continue;
+    }
+
+    const markedText = reviewItem.kind === 'Comment'
+      ? source.slice(3, commentMarkerIndex - 3)
+      : undefined;
+    multilineComments.set(reviewItem.startOffset, {
+      commentText,
+      endOffset: reviewItem.endOffset,
+      markedText,
+      startOffset: reviewItem.startOffset
+    });
+
+    const commentContentStartOffset = reviewItem.startOffset + commentMarkerIndex + 3;
+    for (let offset = commentContentStartOffset; offset < reviewItem.endOffset; offset += 1) {
+      if (characters[offset] !== '\r' && characters[offset] !== '\n') {
+        characters[offset] = ' ';
+      }
+    }
+  }
+
+  return {
+    context: {
+      multilineComments
+    },
+    markdown: characters.join('')
+  };
+}
+
+function collectProtectedBlockRanges(markdown: string): SourceRange[] {
+  const lines = splitMarkdownLines(markdown);
+  const ranges: SourceRange[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const startIndex = index;
+    const codeFence = getCodeFence(lines[index].text);
+    if (codeFence) {
+      index += 1;
+      const fenceCharacter = codeFence[0];
+      while (index < lines.length) {
+        const isClosingFence = lines[index].text.startsWith(
+          fenceCharacter.repeat(codeFence.length)
+        );
+        index += 1;
+        if (isClosingFence) {
+          break;
+        }
+      }
+
+      ranges.push(createLineRange(lines, startIndex, index, markdown.length));
+      continue;
+    }
+
+    const mathBlock = tryRenderMathBlock(lines, index);
+    if (mathBlock) {
+      index = mathBlock.nextIndex;
+      ranges.push(createLineRange(lines, startIndex, index, markdown.length));
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return ranges;
+}
+
+function createLineRange(
+  lines: MarkdownLine[],
+  startIndex: number,
+  nextIndex: number,
+  markdownLength: number
+): SourceRange {
+  return {
+    startOffset: lines[startIndex].startOffset,
+    endOffset: nextIndex < lines.length
+      ? lines[nextIndex].startOffset
+      : markdownLength
+  };
+}
+
+function isOffsetInRanges(offset: number, ranges: SourceRange[]): boolean {
+  return ranges.some((range) =>
+    offset >= range.startOffset && offset < range.endOffset
+  );
 }
 
 function splitMarkdownLines(markdown: string): MarkdownLine[] {
@@ -125,9 +265,68 @@ function renderCodeFence(
   };
 }
 
-function renderTable(
+function tryRenderMathBlock(
   lines: MarkdownLine[],
   startIndex: number
+): { readonly html: string; readonly nextIndex: number } | undefined {
+  const openingLine = lines[startIndex];
+  const trimmedOpeningLine = openingLine.text.trim();
+  const indentation = openingLine.text.length - openingLine.text.trimStart().length;
+  if (indentation > 3 || !trimmedOpeningLine.startsWith('$$')) {
+    return undefined;
+  }
+
+  if (trimmedOpeningLine.length > 4 && trimmedOpeningLine.endsWith('$$')) {
+    const math = trimmedOpeningLine.slice(2, -2).trim();
+    if (math.length === 0) {
+      return undefined;
+    }
+
+    const delimiterStart = openingLine.text.indexOf('$$');
+    return {
+      html: renderMath(math, true, openingLine.startOffset + delimiterStart, openingLine.startOffset + openingLine.text.length),
+      nextIndex: startIndex + 1
+    };
+  }
+
+  if (trimmedOpeningLine !== '$$') {
+    return undefined;
+  }
+
+  const mathLines: string[] = [];
+  let index = startIndex + 1;
+  while (index < lines.length && !/^\s{0,3}\$\$\s*$/.test(lines[index].text)) {
+    mathLines.push(lines[index].text);
+    index += 1;
+  }
+
+  if (index >= lines.length) {
+    return undefined;
+  }
+
+  const math = mathLines.join('\n').trim();
+  if (math.length === 0) {
+    return undefined;
+  }
+
+  const closingLine = lines[index];
+  const delimiterStart = openingLine.text.indexOf('$$');
+  const delimiterEnd = closingLine.text.indexOf('$$') + 2;
+  return {
+    html: renderMath(
+      math,
+      true,
+      openingLine.startOffset + delimiterStart,
+      closingLine.startOffset + delimiterEnd
+    ),
+    nextIndex: index + 1
+  };
+}
+
+function renderTable(
+  lines: MarkdownLine[],
+  startIndex: number,
+  context: MarkdownPreviewRenderContext
 ): { readonly html: string; readonly nextIndex: number } {
   const headerLine = lines[startIndex];
   const rows: MarkdownLine[] = [];
@@ -140,12 +339,12 @@ function renderTable(
 
   const headers = splitTableCells(headerLine.text);
   const headerHtml = headers
-    .map((cell) => `<th>${renderInlineMarkdown(cell.text, headerLine.startOffset + cell.start)}</th>`)
+    .map((cell) => `<th>${renderInlineMarkdown(cell.text, headerLine.startOffset + cell.start, context)}</th>`)
     .join('');
   const bodyHtml = rows
     .map((row) => {
       const cells = splitTableCells(row.text)
-        .map((cell) => `<td>${renderInlineMarkdown(cell.text, row.startOffset + cell.start)}</td>`)
+        .map((cell) => `<td>${renderInlineMarkdown(cell.text, row.startOffset + cell.start, context)}</td>`)
         .join('');
       return `<tr>${cells}</tr>`;
     })
@@ -159,7 +358,8 @@ function renderTable(
 
 function renderList(
   lines: MarkdownLine[],
-  startIndex: number
+  startIndex: number,
+  context: MarkdownPreviewRenderContext
 ): { readonly html: string; readonly nextIndex: number } {
   const firstMarker = parseListMarker(lines[startIndex].text);
   if (!firstMarker) {
@@ -169,14 +369,15 @@ function renderList(
     };
   }
 
-  return renderListAtIndent(lines, startIndex, firstMarker.indent, firstMarker.ordered);
+  return renderListAtIndent(lines, startIndex, firstMarker.indent, firstMarker.ordered, context);
 }
 
 function renderListAtIndent(
   lines: MarkdownLine[],
   startIndex: number,
   indent: number,
-  ordered: boolean
+  ordered: boolean,
+  context: MarkdownPreviewRenderContext
 ): { readonly html: string; readonly nextIndex: number } {
   const tagName = ordered ? 'ol' : 'ul';
   const items: string[] = [];
@@ -189,7 +390,11 @@ function renderListAtIndent(
     }
 
     const itemHtml: string[] = [
-      renderInlineMarkdown(lines[index].text.slice(marker.markerLength), lines[index].startOffset + marker.markerLength)
+      renderInlineMarkdown(
+        lines[index].text.slice(marker.markerLength),
+        lines[index].startOffset + marker.markerLength,
+        context
+      )
     ];
     index += 1;
 
@@ -224,7 +429,13 @@ function renderListAtIndent(
         break;
       }
 
-      const nestedList = renderListAtIndent(lines, index, nextMarker.indent, nextMarker.ordered);
+      const nestedList = renderListAtIndent(
+        lines,
+        index,
+        nextMarker.indent,
+        nextMarker.ordered,
+        context
+      );
       itemHtml.push(nestedList.html);
       index = nestedList.nextIndex;
     }
@@ -266,7 +477,8 @@ function findNextContentLine(lines: MarkdownLine[], startIndex: number): number 
 
 function renderBlockquote(
   lines: MarkdownLine[],
-  startIndex: number
+  startIndex: number,
+  context: MarkdownPreviewRenderContext
 ): { readonly html: string; readonly nextIndex: number } {
   const quoteLines: string[] = [];
   let index = startIndex;
@@ -274,7 +486,11 @@ function renderBlockquote(
   while (index < lines.length && /^\s{0,3}>\s?/.test(lines[index].text)) {
     const marker = lines[index].text.match(/^\s{0,3}>\s?/);
     const markerLength = marker?.[0].length ?? 0;
-    quoteLines.push(renderInlineMarkdown(lines[index].text.slice(markerLength), lines[index].startOffset + markerLength));
+    quoteLines.push(renderInlineMarkdown(
+      lines[index].text.slice(markerLength),
+      lines[index].startOffset + markerLength,
+      context
+    ));
     index += 1;
   }
 
@@ -286,7 +502,8 @@ function renderBlockquote(
 
 function renderParagraph(
   lines: MarkdownLine[],
-  startIndex: number
+  startIndex: number,
+  context: MarkdownPreviewRenderContext
 ): { readonly html: string; readonly nextIndex: number } {
   const paragraphLines: MarkdownLine[] = [];
   let index = startIndex;
@@ -297,7 +514,7 @@ function renderParagraph(
   }
 
   const content = paragraphLines
-    .map((line) => renderInlineMarkdown(line.text, line.startOffset))
+    .map((line) => renderInlineMarkdown(line.text, line.startOffset, context))
     .join('<br>');
 
   return {
@@ -306,12 +523,16 @@ function renderParagraph(
   };
 }
 
-function renderInlineMarkdown(text: string, baseOffset: number): string {
+function renderInlineMarkdown(
+  text: string,
+  baseOffset: number,
+  context: MarkdownPreviewRenderContext
+): string {
   let html = '';
   let index = 0;
 
   while (index < text.length) {
-    const markerHtml = tryRenderCriticMarkup(text, index, baseOffset);
+    const markerHtml = tryRenderCriticMarkup(text, index, baseOffset, context);
     if (markerHtml) {
       html += markerHtml.html;
       index = markerHtml.nextIndex;
@@ -330,8 +551,26 @@ function renderInlineMarkdown(text: string, baseOffset: number): string {
 function tryRenderCriticMarkup(
   text: string,
   index: number,
-  baseOffset: number
+  baseOffset: number,
+  context: MarkdownPreviewRenderContext
 ): { readonly html: string; readonly nextIndex: number } | undefined {
+  const multilineComment = context.multilineComments.get(baseOffset + index);
+  if (multilineComment) {
+    const className = multilineComment.markedText === undefined
+      ? 'mr-hidden-comment'
+      : 'mr-commented';
+    const content = multilineComment.markedText === undefined
+      ? renderMultilineCommentText(multilineComment.commentText)
+      : renderPlainInline(multilineComment.markedText);
+    return renderMarkedSpan(
+      className,
+      multilineComment.startOffset,
+      multilineComment.endOffset,
+      content,
+      text.length
+    );
+  }
+
   if (text.startsWith('{++', index)) {
     const endIndex = text.indexOf('++}', index + 3);
     if (endIndex !== -1) {
@@ -418,6 +657,14 @@ function tryRenderCriticMarkup(
   return undefined;
 }
 
+function renderMultilineCommentText(commentText: string): string {
+  return commentText
+    .trim()
+    .split(/\r\n|\n|\r/)
+    .map((line) => renderPlainInline(line))
+    .join('<br>');
+}
+
 function renderMarkedSpan(
   className: string,
   startOffset: number,
@@ -436,20 +683,126 @@ function renderPlainInlineWithOffsets(text: string, baseOffset: number): string 
     return '';
   }
 
-  return `<span data-markreview-text-start="${baseOffset}" data-markreview-text-end="${baseOffset + text.length}">${renderPlainInline(text)}</span>`;
+  return `<span data-markreview-text-start="${baseOffset}" data-markreview-text-end="${baseOffset + text.length}">${renderPlainInline(text, baseOffset)}</span>`;
 }
 
-function renderPlainInline(text: string): string {
-  let html = escapeHtml(text);
+function renderPlainInline(text: string, baseOffset?: number): string {
+  const protectedSegments: string[] = [];
+  const placeholderPrefix = getInlinePlaceholderPrefix(text);
+  let protectedText = '';
+  let index = 0;
 
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  while (index < text.length) {
+    if (text[index] === '`' && !isEscaped(text, index)) {
+      const codeEndIndex = text.indexOf('`', index + 1);
+      if (codeEndIndex !== -1) {
+        protectedText += createInlinePlaceholder(placeholderPrefix, protectedSegments.length);
+        protectedSegments.push(`<code>${escapeHtml(text.slice(index + 1, codeEndIndex))}</code>`);
+        index = codeEndIndex + 1;
+        continue;
+      }
+    }
+
+    if (isInlineMathStart(text, index)) {
+      const mathEndIndex = findInlineMathEnd(text, index + 1);
+      if (mathEndIndex !== -1) {
+        protectedText += createInlinePlaceholder(placeholderPrefix, protectedSegments.length);
+        protectedSegments.push(renderMath(
+          text.slice(index + 1, mathEndIndex),
+          false,
+          baseOffset === undefined ? undefined : baseOffset + index,
+          baseOffset === undefined ? undefined : baseOffset + mathEndIndex + 1
+        ));
+        index = mathEndIndex + 1;
+        continue;
+      }
+    }
+
+    protectedText += text[index];
+    index += 1;
+  }
+
+  let html = escapeHtml(protectedText);
+
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
 
+  for (let segmentIndex = 0; segmentIndex < protectedSegments.length; segmentIndex += 1) {
+    html = html.replace(
+      createInlinePlaceholder(placeholderPrefix, segmentIndex),
+      protectedSegments[segmentIndex]
+    );
+  }
+
   return html;
+}
+
+function renderMath(
+  math: string,
+  displayMode: boolean,
+  startOffset?: number,
+  endOffset?: number
+): string {
+  const tagName = displayMode ? 'div' : 'span';
+  const className = displayMode ? 'mr-math mr-math-block language-math' : 'mr-math mr-math-inline language-math';
+  const sourceAttributes = startOffset === undefined || endOffset === undefined
+    ? ''
+    : ` data-markreview-math-start="${startOffset}" data-markreview-math-end="${endOffset}"`;
+
+  return `<${tagName} class="${className}" data-math="${escapeHtml(math)}" data-math-display="${displayMode}"${sourceAttributes}>${escapeHtml(math)}</${tagName}>`;
+}
+
+function getInlinePlaceholderPrefix(text: string): string {
+  let prefix = '\uE000MR';
+  while (text.includes(prefix)) {
+    prefix += 'R';
+  }
+
+  return prefix;
+}
+
+function createInlinePlaceholder(prefix: string, index: number): string {
+  return `${prefix}${index}\uE001`;
+}
+
+function isInlineMathStart(text: string, index: number): boolean {
+  return text[index] === '$' &&
+    text[index - 1] !== '$' &&
+    text[index + 1] !== '$' &&
+    text[index + 1] !== undefined &&
+    !/\s/.test(text[index + 1]) &&
+    !isEscaped(text, index);
+}
+
+function findInlineMathEnd(text: string, startIndex: number): number {
+  for (let index = startIndex; index < text.length; index += 1) {
+    if (
+      text[index] !== '$' ||
+      text[index - 1] === '$' ||
+      text[index + 1] === '$' ||
+      isEscaped(text, index)
+    ) {
+      continue;
+    }
+
+    if (index > startIndex && !/\s/.test(text[index - 1])) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function isEscaped(text: string, index: number): boolean {
+  let slashCount = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === '\\'; cursor -= 1) {
+    slashCount += 1;
+  }
+
+  return slashCount % 2 === 1;
 }
 
 function findNextCriticMarkupStart(text: string, startIndex: number): number {
@@ -498,6 +851,7 @@ function isBlockBoundary(lines: MarkdownLine[], index: number): boolean {
   const line = lines[index].text;
   return Boolean(
     getCodeFence(line) ||
+    tryRenderMathBlock(lines, index) ||
     /^(#{1,6})\s+/.test(line) ||
     /^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$/.test(line) ||
     isTableStart(lines, index) ||

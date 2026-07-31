@@ -15,6 +15,7 @@ It uses CriticMarkup directly inside Markdown files, so users can keep one singl
 ## Features
 - Add inline comments with CriticMarkup in-place.
 - Toggle source/preview without switching documents.
+- Render inline and display LaTeX formulas offline with the same KaTeX engine used by Office Viewer.
 - Manage comments and jump to each one from the sidebar.
 - Export an AI prompt that explains CriticMarkup semantics and expected output.
 - Optional clean/accept pass to materialize changes in place.
@@ -25,6 +26,16 @@ It uses CriticMarkup directly inside Markdown files, so users can keep one singl
 - `{~~old text~>new text~~}`
 - `{==highlighted text==}`
 - `{>>comment<<}`
+
+## Formula examples
+- Inline formula: `$E = mc^2$`
+- Display formula:
+
+  ```latex
+  $$
+  \frac{a}{b}
+  $$
+  ```
 
 ## Documentation
 - [中文说明文档](docs/README.zh-CN.md)

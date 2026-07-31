@@ -10,7 +10,10 @@ import { MarkdownSourceTracker } from '../vscode/markdownSourceTracker';
 export class MarkReviewPreviewPanel implements vscode.Disposable {
   private readonly previewStates = new Map<string, MarkReviewPreviewState>();
 
-  public constructor(private readonly sourceTracker: MarkdownSourceTracker) {}
+  public constructor(
+    private readonly sourceTracker: MarkdownSourceTracker,
+    private readonly extensionUri: vscode.Uri
+  ) {}
 
   public start(): vscode.Disposable {
     void Promise.resolve().then(() => {
@@ -201,6 +204,9 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       },
       {
         enableScripts: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this.extensionUri, 'resources')
+        ],
         retainContextWhenHidden: true
       }
     );
@@ -446,14 +452,25 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     const commentPlaceholder = escapeHtml(localize('preview.commentPlaceholder'));
     const previewTitle = escapeHtml(localize('preview.title'));
     const sourceLabel = escapeHtml(localize('preview.source'));
+    const katexRootUri = vscode.Uri.joinPath(this.extensionUri, 'resources', 'katex');
+    const katexStyleUri = escapeHtml(webview.asWebviewUri(
+      vscode.Uri.joinPath(katexRootUri, 'katex.min.css')
+    ).toString());
+    const katexScriptUri = escapeHtml(webview.asWebviewUri(
+      vscode.Uri.joinPath(katexRootUri, 'katex.min.js')
+    ).toString());
+    const katexMhchemScriptUri = escapeHtml(webview.asWebviewUri(
+      vscode.Uri.joinPath(katexRootUri, 'mhchem.min.js')
+    ).toString());
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource}; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${previewTitle}</title>
+  <link rel="stylesheet" href="${katexStyleUri}">
   <style>
     :root {
       color-scheme: light dark;
@@ -642,6 +659,25 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       background: transparent;
     }
 
+    .mr-math {
+      color: var(--vscode-editor-foreground);
+    }
+
+    .mr-math-inline {
+      white-space: nowrap;
+    }
+
+    .mr-math-block {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0.2em 0;
+    }
+
+    .mr-math-error {
+      color: var(--vscode-errorForeground);
+      white-space: pre-wrap;
+    }
+
     a {
       color: var(--vscode-textLink-foreground);
     }
@@ -724,6 +760,8 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
   <main class="mr-shell">
     <article class="mr-document">${content}</article>
   </main>
+  <script nonce="${nonce}" src="${katexScriptUri}"></script>
+  <script nonce="${nonce}" src="${katexMhchemScriptUri}"></script>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const contextMenu = document.querySelector('[data-role="context-menu"]');
@@ -736,6 +774,8 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
     let pendingReviewItem = undefined;
     let pendingSelection = undefined;
     let pendingPoint = { x: 0, y: 0 };
+
+    renderMathExpressions();
 
     window.addEventListener('focus', () => {
       vscode.postMessage({ type: 'activate' });
@@ -972,6 +1012,11 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       const element = node.nodeType === Node.ELEMENT_NODE
         ? node
         : node.parentElement;
+      const mathElement = element?.closest('[data-markreview-math-start]');
+      if (mathElement) {
+        return getMathSourceOffset(mathElement, node, offset);
+      }
+
       const sourceSpan = element?.closest('[data-markreview-text-start]');
       if (!sourceSpan) {
         return undefined;
@@ -991,6 +1036,49 @@ export class MarkReviewPreviewPanel implements vscode.Disposable {
       }
 
       return sourceStart + prefixRange.toString().length;
+    }
+
+    function getMathSourceOffset(mathElement, node, offset) {
+      const sourceStart = Number(mathElement.dataset.markreviewMathStart);
+      const sourceEnd = Number(mathElement.dataset.markreviewMathEnd);
+      if (!Number.isFinite(sourceStart) || !Number.isFinite(sourceEnd)) {
+        return undefined;
+      }
+
+      const prefixRange = document.createRange();
+      prefixRange.selectNodeContents(mathElement);
+      try {
+        prefixRange.setEnd(node, offset);
+      } catch {
+        return sourceStart;
+      }
+
+      const renderedLength = mathElement.textContent?.length ?? 0;
+      return prefixRange.toString().length * 2 < renderedLength
+        ? sourceStart
+        : sourceEnd;
+    }
+
+    function renderMathExpressions() {
+      if (typeof katex === 'undefined') {
+        return;
+      }
+
+      document.querySelectorAll('.language-math[data-math]').forEach((element) => {
+        try {
+          katex.render(element.dataset.math ?? '', element, {
+            displayMode: element.dataset.mathDisplay === 'true',
+            strict: false,
+            throwOnError: false,
+            output: 'html',
+            macros: {},
+            trust: true
+          });
+        } catch (error) {
+          element.classList.add('mr-math-error');
+          element.textContent = error instanceof Error ? error.message : String(error);
+        }
+      });
     }
 
     function showContextMenu(x, y) {

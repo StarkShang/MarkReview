@@ -10,7 +10,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const sourceTracker = new MarkdownSourceTracker();
   const decorationController = new CriticMarkupDecorationController();
   const treeDataProvider = new MarkReviewTreeDataProvider(sourceTracker);
-  const previewPanel = new MarkReviewPreviewPanel(sourceTracker);
+  const previewPanel = new MarkReviewPreviewPanel(sourceTracker, context.extensionUri);
   const treeView = vscode.window.createTreeView('markReview.comments', {
     treeDataProvider
   });
